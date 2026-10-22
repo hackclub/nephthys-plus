@@ -1,4 +1,3 @@
-
 from nephthys.transcripts.transcript import Transcript
 
 
@@ -11,7 +10,7 @@ class Twisted(Transcript):
     help_channel: str = "C0BQM80CQQ6"  # #Twisted-help
     ticket_channel: str = "C0BKG9RBZRR"
     team_channel: str = "C0BKH9PQLPP"
-    
+
     faq_link: str = "https://hackclub.enterprise.slack.com/docs/T0266FRGM/F0BQVBNNVJR"
     faq_canvas_id: str | None = "F0BQVBNNVJR"
     faq_events_question: str | None = None
@@ -30,7 +29,7 @@ As a reminder, you can take a look at <https://hackclub.enterprise.slack.com/doc
     resolve_ticket_button: str = "Mark As Resolved"
 
     ticket_resolve: str = (
-        f"<@{{user_id}}> has marked this as resolved. "
+        "<@{user_id}> has marked this as resolved. "
         "If you think this was a mistake, you may reopen this ticket. "
         "More questions? Feel free to send another message in "
         "<#C0BQM80CQQ6> and we'll be there to help too!"
