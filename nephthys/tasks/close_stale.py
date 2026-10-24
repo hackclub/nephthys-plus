@@ -88,7 +88,7 @@ STALE_INSTRUCTIONS = (
 )
 
 
-async def jev_should_close(ticket: Ticket) -> bool:
+async def jev_should_close(ticket: Ticket) -> bool | None:
     """Asks Jev whether a stale ticket should be closed. Without AI configured, every
     stale ticket closes (the old behaviour); on error, it stays open until the next run."""
     if not ai_client:
@@ -137,7 +137,7 @@ async def jev_should_close(ticket: Ticket) -> bool:
         return choice == "close"
     except Exception as e:
         logging.error(f"Jev stale decision failed ticket={ticket.msg_ts}: {e}")
-        return False
+        return None
 
 
 async def close_stale_tickets():
@@ -186,14 +186,17 @@ async def close_stale_tickets():
                             f"Skipping stale ticket {ticket.msg_ts}: no assigned or opened user"
                         )
                         continue
-                    if not await jev_should_close(ticket):
+                    should_close = await jev_should_close(ticket)
+                    if should_close is None:
+                        continue
+                    if not should_close:
                         if assignee:
                             # The nudge is a new reply, so the ticket isn't stale again
                             # for another stale_ticket_days.
                             await env.slack_client.chat_postMessage(
                                 channel=env.slack_help_channel,
                                 thread_ts=ticket.msg_ts,
-                                text=f":rac_nooo: <@{assignee.slack_id}> this ticket is still open and the poster looks like they still need help, please help out!",
+                                text=f":rac_nooo: <@{assignee.slack_id}> this ticket is still open",
                             )
                         continue
                     try:

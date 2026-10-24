@@ -15,6 +15,9 @@ async def delete_message(ts: str, channel: str, reason: str) -> bool:
             json={"ts": ts, "reason": reason},
         ) as resp:
             body = await resp.json()
+            failed = body.get("failed") or []
+            if any(f.get("error") == "message_not_found" for f in failed):
+                return True
             if resp.status != 200 or ts not in body.get("deleted", []):
                 logging.error(f"Prometheus failed to delete message ts={ts}: {body}")
                 return False

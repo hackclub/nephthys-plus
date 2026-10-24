@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import Mapping
 from typing import Any
 from typing import Literal
@@ -73,10 +74,19 @@ async def decisions(
     Raises `httpx.HTTPStatusError` on API error."""
     if not api_key:
         raise RuntimeError("AI_API_KEY is not set")
-    response = await _http_client.post(
-        f"{base_url}/jev/systemone",
-        headers={"Authorization": f"Bearer {api_key}"},
-        json={"model": model, "state": state, "questions": questions},
-    )
+    for attempt in range(3):
+        try:
+            response = await _http_client.post(
+                f"{base_url}/jev/systemone",
+                headers={"Authorization": f"Bearer {api_key}"},
+                json={"model": model, "state": state, "questions": questions},
+            )
+        except httpx.TransportError:
+            if attempt == 2:
+                raise
+        else:
+            if response.status_code < 500 or attempt == 2:
+                break
+        await asyncio.sleep(0.5 * 2**attempt)
     response.raise_for_status()
     return response.json()

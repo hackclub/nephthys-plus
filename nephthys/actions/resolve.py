@@ -191,7 +191,7 @@ async def resolve(
             )
             jev_decided = True
     except Exception as e:
-        logging.error(f"Failed to pick credit user: {e}", exc_info=True)
+        logging.error(f"Failed to pick credit user: {e!r}", exc_info=True)
     await Ticket.update(
         {
             Ticket.status: TicketStatus.CLOSED,

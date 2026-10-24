@@ -380,7 +380,7 @@ async def match_faq(text: str, not_identity_verified: bool = False) -> FaqMatch:
         response = await decisions(model=model, state=state, questions=questions)
     except HTTPStatusError as e:
         logging.error(
-            f'Failed to match FAQ text="{text}" error="{e}" response="{e.response.text}"'
+            f'Failed to match FAQ text="{text}" error="{e}" response="{e.response.text[:200]}"'
         )
         return FaqMatch()
     except Exception as e:

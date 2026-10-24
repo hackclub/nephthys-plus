@@ -78,7 +78,7 @@ class Ticket(Table, tablename="Ticket"):
     )
 
     assigned_at = Timestamptz(null=True, db_column_name="assignedAt")
-    first_reply_at = Timestamptz(null=True, db_column_name="firstReplyAt")
+    first_reply_at = Timestamptz(null=True, default=None, db_column_name="firstReplyAt")
     closed_at = Timestamptz(null=True, db_column_name="closedAt")
     reopened_at = Timestamptz(null=True, db_column_name="reopenedAt")
 
