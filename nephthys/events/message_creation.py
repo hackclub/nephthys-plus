@@ -250,7 +250,7 @@ async def handle_new_question(
                 text=user_facing_message_text,
                 ticket_url=ticket_url,
                 show_ask_ai=bool(ai_client)
-                and 0 <= env.ai_help_min_tickets < past_tickets,
+                and 0 <= env.ai_help_min_tickets <= past_tickets,
                 wait_estimate=wait_estimate,
             )
     except ThreadGoneError:

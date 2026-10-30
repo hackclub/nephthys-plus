@@ -76,11 +76,11 @@ The welcome message in a new question's thread ends with a line like "typical wa
 
 ### "BETA ask ai" button
 
-New tickets from users with more than `AI_HELP_MIN_TICKETS` past tickets get a **BETA ask ai** button. Clicking it makes the bot search public Slack messages, channel bookmarks, canvases and web pages, then reply in the thread with a cited answer (searching and reading bookmarks, canvases and files uses `SLACK_USER_TOKEN`, which needs the `search:read`, `bookmarks:read`, `files:read`, `channels:read` and `users:read` user scopes) and a "may be inaccurate" disclaimer. Helpers still follow up as normal.
+New tickets from users with at least `AI_HELP_MIN_TICKETS` past tickets get a **BETA ask ai** button. Clicking it makes the bot search public Slack messages, channel bookmarks, canvases and web pages, then reply in the thread with a cited answer (searching and reading bookmarks, canvases and files uses `SLACK_USER_TOKEN`, which needs the `search:read`, `bookmarks:read`, `files:read`, `channels:read` and `users:read` user scopes) and a "may be inaccurate" disclaimer. Helpers still follow up as normal.
 
 | Variable | Required? | Description | Default |
 | -------- | --------- | ----------- | ------- |
-| `AI_HELP_MIN_TICKETS` | Optional | Show the button to users with _more than_ this many past tickets. `-1` disables it | `4` |
+| `AI_HELP_MIN_TICKETS` | Optional | Show the button to users with _at least_ this many past tickets. `-1` disables it | `4` |
 
 ## Logging
 
