@@ -88,5 +88,7 @@ async def decisions(
             if response.status_code < 500 or attempt == 2:
                 break
         await asyncio.sleep(0.5 * 2**attempt)
+    else:
+        raise RuntimeError("unreachable")
     response.raise_for_status()
     return response.json()
