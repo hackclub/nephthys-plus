@@ -96,6 +96,16 @@ async def handle_message_in_thread(event: dict[str, Any], db_user: User | None):
         .first()
     )
     if not ticket_message:
+        if db_user and db_user.helper and event.get("text", "").startswith("?"):
+            logging.warning(
+                f"Macro sent in thread without a ticket thread_ts={event['thread_ts']} helper_id={db_user.id}"
+            )
+            await env.slack_client.chat_postEphemeral(
+                channel=event["channel"],
+                thread_ts=event["thread_ts"],
+                user=event["user"],
+                text="No ticket exists for this thread, so macros can't run here.",
+            )
         return
     text: str = event.get("text", "")
     first_word = text.split()[0].lower() if text.strip() else ""
@@ -249,6 +259,31 @@ async def handle_new_question(
         )
         return
 
+    user_facing_message_ts = user_facing_message["ts"]
+    if not user_facing_message_ts:
+        logging.error(f"User-facing message has no ts: {user_facing_message}")
+        return
+
+    async with perf_timer("Creating ticket in DB"):
+        ticket = Ticket(
+            description=text,
+            status=TicketStatus.OPEN,
+            msg_ts=event["ts"],
+            ticket_ts=ticket_message_ts,
+            opened_by=db_user_id,
+            assigned_at=None,
+            closed_at=None,
+            reopened_at=None,
+        )
+        await ticket.save()
+
+        bot_msg = BotMessage(
+            channel_id=event["channel"],
+            ts=user_facing_message_ts,
+            ticket=ticket.id,
+        )
+        await bot_msg.save()
+
     async with perf_timer(
         "AI ticket title generation", TICKET_TITLE_GENERATION_DURATION
     ):
@@ -258,6 +293,11 @@ async def handle_new_question(
         "AI category tag generation", TICKET_CATEGORY_GENERATION_DURATION
     ):
         category_tag = await generate_category_tag(text)
+
+    ticket.title = title
+    if category_tag:
+        ticket.category_tag = category_tag
+    await ticket.save()
 
     if category_tag:
         blocks = await backend_message_blocks(
@@ -273,34 +313,6 @@ async def handle_new_question(
             text=backend_message_fallback_text(author_id, text),
             blocks=blocks,
         )
-
-    user_facing_message_ts = user_facing_message["ts"]
-    if not user_facing_message_ts:
-        logging.error(f"User-facing message has no ts: {user_facing_message}")
-        return
-
-    async with perf_timer("Creating ticket in DB"):
-        ticket = Ticket(
-            title=title,
-            description=text,
-            status=TicketStatus.OPEN,
-            msg_ts=event["ts"],
-            ticket_ts=ticket_message_ts,
-            opened_by=db_user_id,
-            assigned_at=None,
-            closed_at=None,
-            reopened_at=None,
-        )
-        if category_tag:
-            ticket.category_tag = category_tag
-        await ticket.save()
-
-        bot_msg = BotMessage(
-            channel_id=event["channel"],
-            ts=user_facing_message_ts,
-            ticket=ticket.id,
-        )
-        await bot_msg.save()
 
     try:
         await client.reactions_add(
