@@ -48,8 +48,7 @@
                 "member_joined_channel",
                 "member_left_channel",
                 "message.channels",
-                "message.groups",
-                "message_metadata_posted"
+                "message.groups"
             ]
         },
         "interactivity": {
