@@ -78,6 +78,7 @@ async def assign_category_tag_callback(
             past_tickets=other_tickets,
             current_category_tag_id=tag_id,
             reopened_by=ticket.reopened_by,
+            ticket_id=ticket.id,
         ),
     )
 

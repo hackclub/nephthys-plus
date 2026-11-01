@@ -61,6 +61,7 @@ async def reopen(ticket: Ticket, reopened_by: User, client: AsyncWebClient):
         client=env.slack_client,
         current_category_tag_id=ticket.category_tag,
         reopened_by=reopened_by,
+        ticket_id=ticket.id,
         display_name=author_profile.display_name(),
         profile_pic=author_profile.profile_pic_512x(),
     )

@@ -15,6 +15,7 @@ from nephthys.database.enums import TicketStatus
 from nephthys.database.enums import UserType
 from nephthys.database.tables import BotMessage
 from nephthys.database.tables import CategoryTag
+from nephthys.database.tables import TeamTag
 from nephthys.database.tables import Ticket
 from nephthys.database.tables import User
 from nephthys.events.message.send_backend_message import backend_message_blocks
@@ -299,12 +300,17 @@ async def handle_new_question(
         ticket.category_tag = category_tag
     await ticket.save()
 
-    if category_tag:
+    team_tag = await generate_team_tag(text)
+    if team_tag:
+        await ticket.add_m2m(team_tag, m2m=Ticket.team_tags)
+
+    if category_tag or team_tag:
         blocks = await backend_message_blocks(
             author_user_id=author_id,
             msg_ts=event["ts"],
             past_tickets=past_tickets,
-            current_category_tag_id=category_tag.id,
+            current_category_tag_id=category_tag.id if category_tag else None,
+            current_team_tag_ids=[team_tag.id] if team_tag else None,
         )
 
         await client.chat_update(
@@ -612,3 +618,56 @@ async def generate_category_tag(text: str) -> CategoryTag | None:
     )
 
     return category_tag
+
+
+async def generate_team_tag(text: str) -> TeamTag | None:
+    if not env.ai_category_tagging:
+        return None
+    team_tags = await TeamTag.objects()
+    if not team_tags or not ai_client:
+        return None
+    model = env.ai_category_model
+
+    try:
+        response = await decisions(
+            model=model,
+            state={"ticket": {"message_content": text}},
+            questions={
+                "team_tag": {
+                    "type": "choice",
+                    "instructions": "Which team tag best fits this ticket? If a general or catch-all tag is available, choose it when no specialized team fits; otherwise choose the best-matching team.",
+                    "criteria": {tag.name: None for tag in team_tags},
+                }
+            },
+        )
+    except HTTPStatusError as e:
+        logging.error(
+            f'Failed to choose team tag for ticket text="{text}" error="{e}" response="{e.response.text}"'
+        )
+        return None
+    except Exception as e:
+        logging.error(
+            f'Failed to choose team tag for ticket text="{text}" error="{e}"',
+            exc_info=True,
+        )
+        return None
+
+    answer = response["answers"].get("team_tag")
+    if not answer or answer["type"] != "choice":
+        logging.error(
+            f'AI response is missing team tag answer for text="{text}" response="{response}"'
+        )
+        return None
+
+    team_tag = next((tag for tag in team_tags if tag.name == answer["choice"]), None)
+    if not team_tag:
+        logging.error(f'AI chose invalid team tag name: "{answer["choice"]}"')
+        return None
+
+    tokens = response.get("usage", {}).get("input_tokens")
+    if tokens:
+        AI_TOKENS.labels(task="team_tag", type="input", model=model).inc(tokens)
+    logging.info(
+        f"Successfully generated team tag tag={team_tag.name} confidence={answer.get('confidence', '?')} tokens={tokens}"
+    )
+    return team_tag

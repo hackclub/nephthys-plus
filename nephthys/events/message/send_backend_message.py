@@ -1,6 +1,8 @@
 from slack_sdk.web.async_client import AsyncWebClient
 
 from nephthys.database.tables import CategoryTag
+from nephthys.database.tables import TagsOnTickets
+from nephthys.database.tables import TeamTag
 from nephthys.database.tables import User
 from nephthys.utils.env import env
 
@@ -11,6 +13,8 @@ async def backend_message_blocks(
     past_tickets: int,
     current_category_tag_id: int | None = None,
     reopened_by: User | None = None,
+    ticket_id: int | None = None,
+    current_team_tag_ids: list[int] | None = None,
 ) -> list[dict]:
     thread_url = f"https://hackclub.slack.com/archives/{env.slack_help_channel}/p{msg_ts.replace('.', '')}"
     if current_category_tag_id is not None:
@@ -47,18 +51,45 @@ async def backend_message_blocks(
     if initial_option:
         category_tags_dropdown["element"]["initial_option"] = initial_option
 
+    team_tags_dropdown = {
+        "type": "input",
+        "label": {"type": "plain_text", "text": "Team tags", "emoji": True},
+        "element": {
+            "action_id": "team-tag-list",
+            "type": "multi_external_select",
+            "placeholder": {"type": "plain_text", "text": "Select tags"},
+            "min_query_length": 0,
+        },
+    }
+    if ticket_id is not None:
+        team_tag_ids = (
+            await TagsOnTickets.objects()
+            .where(TagsOnTickets.ticket == ticket_id)
+            .values_list(TagsOnTickets.tag, flat=True)
+        )
+        team_tags = (
+            await TeamTag.objects().where(TeamTag.id.is_in(team_tag_ids))
+            if team_tag_ids
+            else []
+        )
+    elif current_team_tag_ids:
+        team_tags = await TeamTag.objects().where(
+            TeamTag.id.is_in(current_team_tag_ids)
+        )
+    else:
+        team_tags = []
+    if team_tags:
+        team_tags_dropdown["element"]["initial_options"] = [
+            {
+                "text": {"type": "plain_text", "text": tag.name},
+                "value": str(tag.id),
+            }
+            for tag in team_tags
+        ]
+
     return [
         category_tags_dropdown,
-        {
-            "type": "input",
-            "label": {"type": "plain_text", "text": "Team tags", "emoji": True},
-            "element": {
-                "action_id": "team-tag-list",
-                "type": "multi_external_select",
-                "placeholder": {"type": "plain_text", "text": "Select tags"},
-                "min_query_length": 0,
-            },
-        },
+        team_tags_dropdown,
         {
             "type": "context",
             "elements": [
@@ -95,6 +126,8 @@ async def send_backend_message(
     client: AsyncWebClient,
     current_category_tag_id: int | None = None,
     reopened_by: User | None = None,
+    ticket_id: int | None = None,
+    current_team_tag_ids: list[int] | None = None,
     display_name: str | None = None,
     profile_pic: str | None = None,
 ):
@@ -104,7 +137,13 @@ async def send_backend_message(
         channel=env.slack_ticket_channel,
         text=backend_message_fallback_text(author_user_id, description, reopened_by),
         blocks=await backend_message_blocks(
-            author_user_id, msg_ts, past_tickets, current_category_tag_id, reopened_by
+            author_user_id,
+            msg_ts,
+            past_tickets,
+            current_category_tag_id,
+            reopened_by,
+            ticket_id=ticket_id,
+            current_team_tag_ids=current_team_tag_ids,
         ),
         username=display_name,
         icon_url=profile_pic,
