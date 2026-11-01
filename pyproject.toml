@@ -3,6 +3,8 @@ name = "nephthys"
 version = "0.1.0"
 description = "Slack support bot for Hack Club's help channels"
 readme = "README.md"
+license = "AGPL-3.0-or-later"
+license-files = ["LICENSE", "LICENSE-MIT"]
 requires-python = ">=3.13"
 dependencies = [
     "aiohttp>=3.14.3",

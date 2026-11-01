@@ -166,4 +166,6 @@ Usage: `uv run nephthys+/scripts/add_dummy_data.py <num_records>`
 
 ## License
 
-This project is licensed under the MIT License.
+This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0-or-later). See [LICENSE](LICENSE).
+
+Code contributed before the relicensing was released under the MIT License; its original notice is preserved in [LICENSE-MIT](LICENSE-MIT).
