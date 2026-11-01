@@ -59,6 +59,9 @@ async def assign_team_tag_callback(
     for old_tag in old_tags:
         await old_tag.remove()
 
+    if not new_tags:
+        return
+
     subs = await UserTagSubscription.objects().where(
         UserTagSubscription.tag.is_in([tag["value"] for tag in new_tags])
     )
@@ -67,7 +70,9 @@ async def assign_team_tag_callback(
     if user.id in sub_user_ids:
         sub_user_ids.remove(user.id)
 
-    db_users = await User.objects().where(User.id.is_in(sub_user_ids))
+    db_users = (
+        await User.objects().where(User.id.is_in(sub_user_ids)) if sub_user_ids else []
+    )
 
     users = []
     for db_user in db_users:
