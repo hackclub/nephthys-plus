@@ -63,9 +63,9 @@ async def backend_message_blocks(
     }
     if ticket_id is not None:
         team_tag_ids = (
-            await TagsOnTickets.objects()
+            await TagsOnTickets.select(TagsOnTickets.tag)
             .where(TagsOnTickets.ticket == ticket_id)
-            .values_list(TagsOnTickets.tag, flat=True)
+            .output(as_list=True)
         )
         team_tags = (
             await TeamTag.objects().where(TeamTag.id.is_in(team_tag_ids))
