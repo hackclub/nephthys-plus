@@ -1,10 +1,10 @@
 from nephthys.transcripts.transcript import Transcript
 
 
-class Help(Transcript):
-    """Transcript for help"""
+class LiftOff(Transcript):
+    """Transcript for Lift Off"""
 
-    program_name: str = "help"
+    program_name: str = "lift-off"
     program_owner: str = "U0A9K5RT3HS"
 
     help_channel: str = "C0CDP2YQX7F"  # help
