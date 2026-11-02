@@ -1,5 +1,7 @@
 import logging
 
+from slack_sdk.models.messages.chunk import MarkdownTextChunk
+from slack_sdk.models.messages.chunk import TaskUpdateChunk
 from slack_sdk.web.async_client import AsyncWebClient
 
 from nephthys.database.tables import Ticket
@@ -16,7 +18,7 @@ _claimed_threads: set[str] = set()
 
 
 async def ask_ai(
-    channel: str, thread_ts: str, user_id: str, client: AsyncWebClient
+    channel: str, thread_ts: str, user_id: str, team_id: str, client: AsyncWebClient
 ) -> bool:
     """Post an AI answer in the thread. Returns True if an answer was posted."""
     ticket = (
@@ -41,11 +43,23 @@ async def ask_ai(
         return False
     _claimed_threads.add(thread_ts)
 
+    stream = await client.chat_stream(
+        channel=channel,
+        thread_ts=thread_ts,
+        recipient_team_id=team_id,
+        recipient_user_id=user_id,
+    )
+    await stream.append(
+        chunks=[TaskUpdateChunk(id="think", title="Thinking...", status="in_progress")]
+    )
     try:
         text = await ai_help.answer(channel, thread_ts)
     except Exception:
         _claimed_threads.discard(thread_ts)  # allow a retry after a failure
         logging.exception(f"AI help failed for thread_ts={thread_ts}")
+        await stream.stop(
+            chunks=[TaskUpdateChunk(id="think", title="Failed", status="error")]
+        )
         await client.chat_postEphemeral(
             channel=channel,
             user=user_id,
@@ -54,11 +68,10 @@ async def ask_ai(
         )
         return False
 
-    await client.chat_postMessage(
-        channel=channel,
-        thread_ts=thread_ts,
-        text=f"{DISCLAIMER}\n\n{text}",
-        unfurl_links=False,
-        unfurl_media=False,
+    await stream.stop(
+        chunks=[
+            TaskUpdateChunk(id="think", title="Thought", status="complete"),
+            MarkdownTextChunk(text=f"{DISCLAIMER}\n\n{text}"),
+        ]
     )
     return True

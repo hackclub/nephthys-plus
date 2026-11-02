@@ -103,6 +103,7 @@ async def handle_ask_ai_button(
         channel=channel,
         thread_ts=thread_ts,
         user_id=body["user"]["id"],
+        team_id=body["team"]["id"],
         client=client,
     )
     if answered:
