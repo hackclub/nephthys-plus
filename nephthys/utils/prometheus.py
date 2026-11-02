@@ -50,18 +50,22 @@ async def delete_thread(thread_ts: str, channel: str, reason: str) -> bool:
     key is set, otherwise falls back to deleting each message individually.
     """
     if env.prometheus_api_key:
-        async with env.session.post(
-            f"{env.prometheus_base_url}/api/v1/threads/delete",
-            headers={"Authorization": f"Bearer {env.prometheus_api_key}"},
-            json={"thread_ts": thread_ts, "reason": reason},
-        ) as resp:
-            body = await resp.json()
-            if resp.status != 200 or not body.get("ok"):
-                logging.error(
-                    f"Prometheus failed to delete thread ts={thread_ts}: {body}"
-                )
-                return False
-            return True
+        try:
+            async with env.session.post(
+                f"{env.prometheus_base_url}/api/v1/threads/delete",
+                headers={"Authorization": f"Bearer {env.prometheus_api_key}"},
+                json={"thread_ts": thread_ts, "reason": reason},
+            ) as resp:
+                body = await resp.json(content_type=None)
+                if resp.status != 200 or not body.get("ok"):
+                    logging.error(
+                        f"Prometheus failed to delete thread ts={thread_ts}: {body}"
+                    )
+                    return False
+                return True
+        except Exception:
+            logging.exception(f"Prometheus failed to delete thread ts={thread_ts}")
+            return False
 
     replies = await env.slack_client.conversations_replies(
         channel=channel, ts=thread_ts

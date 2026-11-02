@@ -104,8 +104,6 @@ async def delete_bot_replies(ticket_ref: int):
     if not ticket:
         raise ValueError(f"Ticket with ID {ticket_ref} does not exist")
     bot_msgs = await BotMessage.objects().where(BotMessage.ticket == ticket_ref)
-    if not bot_msgs:
-        raise ValueError(f"userFacingMsgs is not present on Ticket ID {ticket_ref}")
     for bot_msg in bot_msgs:
         await delete_message(bot_msg.channel_id, bot_msg.ts)
         await bot_msg.remove()

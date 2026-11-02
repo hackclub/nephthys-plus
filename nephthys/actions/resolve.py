@@ -265,9 +265,10 @@ async def resolve(
             timestamp=ts,
         )
     except SlackApiError as e:
-        logging.error(
-            f"Failed to remove thinking reaction from ticket with ts {ts}: {e.response['error']}"
-        )
+        if e.response["error"] != "no_reaction":
+            logging.error(
+                f"Failed to remove thinking reaction from ticket with ts {ts}: {e.response['error']}"
+            )
 
     if await env.workspace_admin_available():
         await add_thread_to_delete_queue(

@@ -73,9 +73,7 @@ async def open_app_home(
     try:
         await client.views_publish(view=loading_view, user_id=user_id)
     except Exception as e:
-        logging.error(
-            f'Error publishing loading view user_id={user_id} error="{e}" view="{loading_view}"'
-        )
+        logging.warning(f'Error publishing loading view user_id={user_id} error="{e}"')
 
     try:
         # Generate the view (this is when DB queries are made)
