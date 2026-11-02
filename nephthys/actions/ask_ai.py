@@ -10,6 +10,10 @@ DISCLAIMER = (
     "check important information. a helper will come by soon to confirm._"
 )
 
+# Thread timestamps that have an AI answer in progress or already posted.
+# Guards against repeated presses of the "BETA ask ai" button.
+_claimed_threads: set[str] = set()
+
 
 async def ask_ai(channel: str, thread_ts: str, user_id: str, client: AsyncWebClient):
     ticket = (
@@ -24,9 +28,20 @@ async def ask_ai(channel: str, thread_ts: str, user_id: str, client: AsyncWebCli
         )
         return
 
+    if thread_ts in _claimed_threads:
+        await client.chat_postEphemeral(
+            channel=channel,
+            user=user_id,
+            thread_ts=thread_ts,
+            text="The AI has already answered this question (or is answering it now).",
+        )
+        return
+    _claimed_threads.add(thread_ts)
+
     try:
         text = await ai_help.answer(channel, thread_ts)
     except Exception:
+        _claimed_threads.discard(thread_ts)  # allow a retry after a failure
         logging.exception(f"AI help failed for thread_ts={thread_ts}")
         await client.chat_postEphemeral(
             channel=channel,
