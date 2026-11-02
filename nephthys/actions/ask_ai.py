@@ -15,7 +15,10 @@ DISCLAIMER = (
 _claimed_threads: set[str] = set()
 
 
-async def ask_ai(channel: str, thread_ts: str, user_id: str, client: AsyncWebClient):
+async def ask_ai(
+    channel: str, thread_ts: str, user_id: str, client: AsyncWebClient
+) -> bool:
+    """Post an AI answer in the thread. Returns True if an answer was posted."""
     ticket = (
         await Ticket.objects(Ticket.opened_by).where(Ticket.msg_ts == thread_ts).first()
     )
@@ -26,7 +29,7 @@ async def ask_ai(channel: str, thread_ts: str, user_id: str, client: AsyncWebCli
             thread_ts=thread_ts,
             text="Only the person who asked the question can use this button.",
         )
-        return
+        return False
 
     if thread_ts in _claimed_threads:
         await client.chat_postEphemeral(
@@ -35,7 +38,7 @@ async def ask_ai(channel: str, thread_ts: str, user_id: str, client: AsyncWebCli
             thread_ts=thread_ts,
             text="The AI has already answered this question (or is answering it now).",
         )
-        return
+        return False
     _claimed_threads.add(thread_ts)
 
     try:
@@ -49,7 +52,7 @@ async def ask_ai(channel: str, thread_ts: str, user_id: str, client: AsyncWebCli
             thread_ts=thread_ts,
             text="Sorry, the AI couldn't answer that. A helper will be along soon!",
         )
-        return
+        return False
 
     await client.chat_postMessage(
         channel=channel,
@@ -58,3 +61,4 @@ async def ask_ai(channel: str, thread_ts: str, user_id: str, client: AsyncWebCli
         unfurl_links=False,
         unfurl_media=False,
     )
+    return True

@@ -97,12 +97,35 @@ async def handle_ask_ai_button(
     ack: AsyncAck, body: Dict[str, Any], client: AsyncWebClient
 ):
     await ack()
-    await ask_ai(
-        channel=body["channel"]["id"],
-        thread_ts=body["actions"][0]["value"],
+    channel = body["channel"]["id"]
+    thread_ts = body["actions"][0]["value"]
+    answered = await ask_ai(
+        channel=channel,
+        thread_ts=thread_ts,
         user_id=body["user"]["id"],
         client=client,
     )
+    if answered:
+        # Slack buttons can't be disabled, so drop the button from the message.
+        message = body.get("message", {})
+        blocks = []
+        for block in message.get("blocks", []):
+            if block.get("type") == "actions":
+                block = {
+                    **block,
+                    "elements": [
+                        el
+                        for el in block.get("elements", [])
+                        if el.get("action_id") != "ask_ai"
+                    ],
+                }
+            blocks.append(block)
+        await client.chat_update(
+            channel=channel,
+            ts=message.get("ts", thread_ts),
+            text=message.get("text", ""),
+            blocks=blocks,
+        )
 
 
 @app.options("tag-list")  # compat with old backend msgs
