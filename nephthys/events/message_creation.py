@@ -448,13 +448,29 @@ def get_forwarded_ticket_user(event: dict[str, Any]) -> str | None:
     if not isinstance(payload, dict) or payload.get("ticket") is not True:
         return None
     source_user_id = payload.get("source_user_id")
-    return source_user_id if isinstance(source_user_id, str) else None
+    return source_user_id if isinstance(source_user_id, str) and source_user_id else None
+
+
+def get_message_author_id(event: dict[str, Any]) -> str | None:
+    forwarded_user_id = get_forwarded_ticket_user(event)
+    if forwarded_user_id:
+        return forwarded_user_id
+    user_id = event.get("user")
+    return user_id if isinstance(user_id, str) else None
 
 
 async def on_message(event: dict[str, Any], client: AsyncWebClient):
     """
     Handle incoming messages in Slack.
     """
+    author_id = get_message_author_id(event)
+    if env.is_ignored_user(author_id):
+        logging.info(
+            "Ignoring message from configured ignored user: %s",
+            author_id,
+        )
+        return
+
     forwarded_user_id = get_forwarded_ticket_user(event)
     if forwarded_user_id:
         if await Ticket.objects().where(Ticket.msg_ts == event["ts"]).first():

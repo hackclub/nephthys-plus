@@ -41,6 +41,12 @@ def get_environ_bool(name: str, default: bool) -> bool:
     raise ValueError(f"Invalid boolean env var {name}={value!r}")
 
 
+def parse_user_ids(value: str | None) -> frozenset[str]:
+    if not value:
+        return frozenset()
+    return frozenset(user_id.strip() for user_id in value.split(",") if user_id.strip())
+
+
 @dataclass
 class HCAConfig:
     client_id: str
@@ -143,6 +149,7 @@ class Environment:
         self.slack_ticket_channel = os.environ.get("SLACK_TICKET_CHANNEL", "unset")
         self.slack_bts_channel = os.environ.get("SLACK_BTS_CHANNEL", "unset")
         self.slack_maintainer_id = os.environ.get("SLACK_MAINTAINER_ID", "unset")
+        self.ignored_users = parse_user_ids(os.environ.get("IGNORED_USERS"))
         self.program = os.environ.get("PROGRAM", "summer_of_making")
         self.daily_summary = get_environ_bool("DAILY_SUMMARY", default=True)
         self.daily_summary_max_tickets = int(
@@ -210,6 +217,9 @@ class Environment:
 
         # Cache whether the user token has workspace admin privileges
         self._workspace_admin_available: bool | Literal["unchecked"] = "unchecked"
+
+    def is_ignored_user(self, user_id: str | None) -> bool:
+        return bool(user_id and user_id in self.ignored_users)
 
     async def workspace_admin_available(self) -> bool:
         """Check if the provided user token has workspace admin privileges."""

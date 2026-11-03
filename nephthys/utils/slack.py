@@ -40,6 +40,7 @@ from nephthys.events.app_home_opened import open_app_home
 from nephthys.events.channel_join import channel_join
 from nephthys.events.channel_left import channel_left
 from nephthys.events.message_creation import get_forwarded_ticket_user
+from nephthys.events.message_creation import get_message_author_id
 from nephthys.events.message_creation import on_message
 from nephthys.events.message_deletion import on_message_deletion
 from nephthys.options.category_tags import get_category_tags
@@ -69,6 +70,14 @@ async def handle_message(event: Dict[str, Any], client: AsyncWebClient):
 
 @app.event("message_metadata_posted")
 async def handle_message_metadata_posted(event: Dict[str, Any], client: AsyncWebClient):
+    author_id = get_message_author_id(event)
+    if env.is_ignored_user(author_id):
+        logging.info(
+            "Ignoring forwarded message from configured ignored user: %s",
+            author_id,
+        )
+        return
+
     channel = event["channel_id"]
     ts = event["message_ts"]
     history = await client.conversations_history(
@@ -97,12 +106,20 @@ async def handle_ask_ai_button(
     ack: AsyncAck, body: Dict[str, Any], client: AsyncWebClient
 ):
     await ack()
+    user_id = body.get("user", {}).get("id")
+    if env.is_ignored_user(user_id):
+        logging.info(
+            "Ignoring AI request from configured ignored user: %s",
+            user_id,
+        )
+        return
+
     channel = body["channel"]["id"]
     thread_ts = body["actions"][0]["value"]
     answered = await ask_ai(
         channel=channel,
         thread_ts=thread_ts,
-        user_id=body["user"]["id"],
+        user_id=user_id,
         team_id=body["team"]["id"],
         client=client,
     )

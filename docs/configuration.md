@@ -28,6 +28,17 @@ These should always be configured.
 | `PROGRAM` | Required | Name of a transcript (see `transcripts/` folder) the bot will use for its strings | _N/A_ |
 | `APP_TITLE` | Required | A title to be shown to helpers at the top of the App Home, and in the Lobby | _N/A_ |
 | `BASE_URL` | Required | Public HTTPS URL that the bot's web server is accessible from | _N/A_ |
+| `IGNORED_USERS` | Optional | Comma-separated Slack user IDs whose messages and AI requests are ignored | _Unset_ (no users ignored) |
+
+`IGNORED_USERS` accepts multiple IDs separated by commas. Whitespace around IDs
+is ignored, and empty entries are discarded. For example:
+
+```env
+IGNORED_USERS="U12345678, U87654321"
+```
+
+Remove a user by removing their ID from the value, or disable the feature by
+setting it to an empty value (`IGNORED_USERS=""`) or leaving it unset.
 
 ## AI provider
 
