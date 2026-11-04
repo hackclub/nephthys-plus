@@ -192,6 +192,17 @@ class Macro(Table, tablename="Macro"):
     created_at = Timestamptz(default=TimestamptzNow(), db_column_name="createdAt")
 
 
+class HelperToken(Table, tablename="helper_token"):
+    id = Serial(primary_key=True, unique=True)
+    user = ForeignKey(
+        references=User,
+        db_column_name="user_id",
+        unique=True,
+    )
+    access_token = Text()
+    created_at = Timestamptz(default=TimestamptzNow())
+
+
 class APIKey(Table, tablename="api_key"):
     id = Serial(primary_key=True, unique=True)
     user = ForeignKey(

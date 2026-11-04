@@ -104,6 +104,14 @@ class Environment:
         self.prometheus_base_url = os.environ.get(
             "PROMETHEUS_BASE_URL", "https://prometheus.hackclub.com"
         ).rstrip("/")
+        self.slack_client_id = os.environ.get("HELPER_OAUTH_CLIENT_ID")
+        self.slack_client_secret = os.environ.get("HELPER_OAUTH_CLIENT_SECRET")
+        self.token_encryption_key = os.environ.get("TOKEN_ENCRYPTION_KEY")
+        self.helper_oauth = bool(
+            self.slack_client_id
+            and self.slack_client_secret
+            and self.token_encryption_key
+        )
         self.ai_title_model = os.environ.get(
             "AI_TITLE_MODEL", "anthropic/claude-haiku-5.5"
         )

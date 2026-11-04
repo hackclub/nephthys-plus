@@ -21,6 +21,7 @@ from nephthys.api.lobby.lobby import api_keys
 from nephthys.api.lobby.lobby import create_api_key
 from nephthys.api.lobby.lobby import delete_api_key
 from nephthys.api.lobby.lobby import lobby
+from nephthys.api.slack_oauth import slack_oauth_callback
 from nephthys.api.stats import stats
 from nephthys.api.stats_range import stats_range
 from nephthys.api.stats_v2 import stats_v2
@@ -116,6 +117,7 @@ app = Starlette(
         Route(path="/health", endpoint=health, methods=["GET"]),
         Route(path="/metrics", endpoint=metrics, methods=["GET"]),
         Route(path="/oauth/callback", endpoint=authorize, methods=["GET"]),
+        Route(path="/slack/oauth/callback", endpoint=slack_oauth_callback),
         Mount("/public", app=StaticFiles(directory=STATIC_DIR), name="static"),
         lobby_submount,
     ],

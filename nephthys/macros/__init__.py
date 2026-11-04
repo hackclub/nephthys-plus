@@ -95,6 +95,7 @@ async def run_macro(
             ts=macro_ts,
             channel=env.slack_help_channel,
             reason=f"?{name} macro trigger",
+            actor_slack_id=helper.slack_id,
         )
         return True
 
