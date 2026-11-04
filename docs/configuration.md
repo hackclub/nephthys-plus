@@ -28,6 +28,9 @@ These should always be configured.
 | `PROGRAM` | Required | Name of a transcript (see `transcripts/` folder) the bot will use for its strings | _N/A_ |
 | `APP_TITLE` | Required | A title to be shown to helpers at the top of the App Home, and in the Lobby | _N/A_ |
 | `BASE_URL` | Required | Public HTTPS URL that the bot's web server is accessible from | _N/A_ |
+| `HELPER_OAUTH_CLIENT_ID` | Optional | Slack app client ID. With `HELPER_OAUTH_CLIENT_SECRET` and `TOKEN_ENCRYPTION_KEY`, enables helper OAuth: helpers connect from the App Home dashboard or on joining the bts channel so macros can delete their own trigger messages. Add `BASE_URL/slack/oauth/callback` as a redirect URL in the Slack app | _N/A_ |
+| `HELPER_OAUTH_CLIENT_SECRET` | Optional | Slack app client secret | _N/A_ |
+| `TOKEN_ENCRYPTION_KEY` | Optional | Fernet key used to encrypt stored helper tokens | _N/A_ |
 | `IGNORED_USERS` | Optional | Comma-separated Slack user IDs whose messages and AI requests are ignored | _Unset_ (no users ignored) |
 
 `IGNORED_USERS` accepts multiple IDs separated by commas. Whitespace around IDs

@@ -24,6 +24,15 @@ class ThreadRip(Macro):
             )
             return
 
+        if not await prometheus.can_delete_others():
+            await env.slack_client.chat_postEphemeral(
+                channel=env.slack_help_channel,
+                thread_ts=ticket.msg_ts,
+                user=helper.slack_id,
+                text="`?threadrip` needs a Prometheus API key or a workspace admin user token, which this instance doesn't have.",
+            )
+            return
+
         if ticket.status != TicketStatus.CLOSED:
             await resolve(
                 ts=ticket.msg_ts,

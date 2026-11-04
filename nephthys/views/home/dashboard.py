@@ -3,8 +3,10 @@ import logging
 import pytz
 from blockkit import Header
 from blockkit import Home
+from blockkit import Section
 
 from nephthys.database.tables import User
+from nephthys.utils import helper_oauth
 from nephthys.utils.env import env
 from nephthys.utils.performance import perf_timer
 from nephthys.views.home import AppHomeView
@@ -37,9 +39,14 @@ async def get_dashboard_view(slack_user: str, db_user: User | None):
     async with perf_timer("Generating leaderboard"):
         leaderboard = await get_leaderboard_components()
 
+    connect = []
+    if await helper_oauth.needs_connect(slack_user):
+        connect = [Section(helper_oauth.connect_text(slack_user))]
+
     return Home(
         [
             *get_header_components(db_user, AppHomeView.DASHBOARD),
+            *connect,
             Header(":rac_graph: funny circle and line things"),
             pie_chart,
             *leaderboard,
