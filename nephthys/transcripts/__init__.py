@@ -13,8 +13,8 @@ from nephthys.transcripts.transcripts.hcai import Hcai
 from nephthys.transcripts.transcripts.hctg import Hctg
 from nephthys.transcripts.transcripts.help import Help
 from nephthys.transcripts.transcripts.identity import Identity
-from nephthys.transcripts.transcripts.lift_off import LiftOff
 from nephthys.transcripts.transcripts.jumpstart import Jumpstart
+from nephthys.transcripts.transcripts.lift_off import LiftOff
 from nephthys.transcripts.transcripts.lynx import Lynx
 from nephthys.transcripts.transcripts.midnight import Midnight
 from nephthys.transcripts.transcripts.nest import Nest
@@ -31,10 +31,10 @@ transcripts: List[Type[Transcript]] = [
     Identity,
     SummerOfMaking,
     Flavortown,
+    Jumpstart,
     LiftOff,
     Midnight,
     Construct,
-    Jumpstart,
     Stasis,
     Hctg,
     Hcai,
