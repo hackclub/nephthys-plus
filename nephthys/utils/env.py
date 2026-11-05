@@ -124,6 +124,8 @@ class Environment:
         self.ai_help_min_tickets = int(os.environ.get("AI_HELP_MIN_TICKETS", "4"))
         # Set to false to stop AI from picking category tags for new tickets
         self.ai_category_tagging = get_environ_bool("AI_CATEGORY_TAGGING", default=True)
+        # Set to false to stop AI from picking team tags for new tickets
+        self.ai_team_tagging = get_environ_bool("AI_TEAM_TAGGING", default=True)
         self.ai_faq_model = os.environ.get("AI_FAQ_MODEL", self.ai_category_model)
         # Only link an FAQ entry when the model is at least this confident
         self.ai_faq_min_confidence = float(

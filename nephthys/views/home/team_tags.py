@@ -39,12 +39,23 @@ async def get_team_tags_view(user: User | None) -> dict:
         else:
             subs = []
         stringified_subs = [f"<@{s}>" for s in subs]
+
+        # Build tag info text
+        tag_info_parts = [f"*{tag.name}*"]
+        if tag.description:
+            tag_info_parts.append(f"_({tag.description})_")
+        if tag.always_tag:
+            tag_info_parts.append(":zap: *always auto-tag*")
+        tag_info_parts.append(
+            f" - {''.join(stringified_subs) if stringified_subs else ':rac_nooo: no subscriptions'}"
+        )
+
         blocks.append(
             {
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": f"*{tag.name}* - {''.join(stringified_subs) if stringified_subs else ':rac_nooo: no subscriptions'}",
+                    "text": "".join(tag_info_parts),
                 },
                 "accessory": (
                     {

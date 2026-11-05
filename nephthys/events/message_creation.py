@@ -300,17 +300,17 @@ async def handle_new_question(
         ticket.category_tag = category_tag
     await ticket.save()
 
-    team_tag = await generate_team_tag(text)
-    if team_tag:
+    team_tags = await generate_team_tags(text)
+    for team_tag in team_tags:
         await ticket.add_m2m(team_tag, m2m=Ticket.team_tags)
 
-    if category_tag or team_tag:
+    if category_tag or team_tags:
         blocks = await backend_message_blocks(
             author_user_id=author_id,
             msg_ts=event["ts"],
             past_tickets=past_tickets,
             current_category_tag_id=category_tag.id if category_tag else None,
-            current_team_tag_ids=[team_tag.id] if team_tag else None,
+            current_team_tag_ids=[tag.id for tag in team_tags] if team_tags else None,
         )
 
         await client.chat_update(
@@ -620,54 +620,80 @@ async def generate_category_tag(text: str) -> CategoryTag | None:
     return category_tag
 
 
-async def generate_team_tag(text: str) -> TeamTag | None:
-    if not env.ai_category_tagging:
-        return None
+async def generate_team_tags(text: str) -> list[TeamTag]:
+    """Generate team tags for a ticket.
+
+    Combines "always tag" tags (based on description matching) with AI-selected tags.
+    """
     team_tags = await TeamTag.objects()
     if not team_tags or not ai_client:
-        return None
-    model = env.ai_category_model
+        return []
 
-    try:
-        response = await decisions(
-            model=model,
-            state={"ticket": {"message_content": text}},
-            questions={
-                "team_tag": {
-                    "type": "choice",
-                    "instructions": "Which team tag best fits this ticket? If a general or catch-all tag is available, choose it when no specialized team fits; otherwise choose the best-matching team.",
-                    "criteria": {tag.name: None for tag in team_tags},
-                }
-            },
-        )
-    except HTTPStatusError as e:
-        logging.error(
-            f'Failed to choose team tag for ticket text="{text}" error="{e}" response="{e.response.text}"'
-        )
-        return None
-    except Exception as e:
-        logging.error(
-            f'Failed to choose team tag for ticket text="{text}" error="{e}"',
-            exc_info=True,
-        )
-        return None
+    result_tags: list[TeamTag] = []
 
-    answer = response["answers"].get("team_tag")
-    if not answer or answer["type"] != "choice":
-        logging.error(
-            f'AI response is missing team tag answer for text="{text}" response="{response}"'
-        )
-        return None
+    # 1. Check for "always tag" team tags whose description matches the ticket
+    always_tags = [tag for tag in team_tags if tag.always_tag and tag.description]
+    for tag in always_tags:
+        # Simple keyword matching: check if any word from description appears in text
+        # Description can contain comma-separated keywords
+        keywords = [
+            kw.strip().lower() for kw in tag.description.split(",") if kw.strip()
+        ]
+        text_lower = text.lower()
+        if any(kw in text_lower for kw in keywords):
+            result_tags.append(tag)
+            logging.info(f"Auto-tagged ticket with always_tag team tag: {tag.name}")
 
-    team_tag = next((tag for tag in team_tags if tag.name == answer["choice"]), None)
-    if not team_tag:
-        logging.error(f'AI chose invalid team tag name: "{answer["choice"]}"')
-        return None
+    # 2. AI-based team tag selection (if enabled)
+    if env.ai_team_tagging:
+        model = env.ai_category_model
 
-    tokens = response.get("usage", {}).get("input_tokens")
-    if tokens:
-        AI_TOKENS.labels(task="team_tag", type="input", model=model).inc(tokens)
-    logging.info(
-        f"Successfully generated team tag tag={team_tag.name} confidence={answer.get('confidence', '?')} tokens={tokens}"
-    )
-    return team_tag
+        try:
+            response = await decisions(
+                model=model,
+                state={"ticket": {"message_content": text}},
+                questions={
+                    "team_tag": {
+                        "type": "choice",
+                        "instructions": "Which team tag best fits this ticket? If a general or catch-all tag is available, choose it when no specialized team fits; otherwise choose the best-matching team.",
+                        "criteria": {tag.name: None for tag in team_tags},
+                    }
+                },
+            )
+        except HTTPStatusError as e:
+            logging.error(
+                f'Failed to choose team tag for ticket text="{text}" error="{e}" response="{e.response.text}"'
+            )
+        except Exception as e:
+            logging.error(
+                f'Failed to choose team tag for ticket text="{text}" error="{e}"',
+                exc_info=True,
+            )
+        else:
+            answer = response["answers"].get("team_tag")
+            if answer and answer["type"] == "choice":
+                ai_tag = next(
+                    (tag for tag in team_tags if tag.name == answer["choice"]), None
+                )
+                if ai_tag:
+                    # Avoid duplicates
+                    if ai_tag not in result_tags:
+                        result_tags.append(ai_tag)
+                    tokens = response.get("usage", {}).get("input_tokens")
+                    if tokens:
+                        AI_TOKENS.labels(
+                            task="team_tag", type="input", model=model
+                        ).inc(tokens)
+                    logging.info(
+                        f"Successfully generated AI team tag tag={ai_tag.name} confidence={answer.get('confidence', '?')} tokens={tokens}"
+                    )
+                else:
+                    logging.error(
+                        f'AI chose invalid team tag name: "{answer["choice"]}"'
+                    )
+            else:
+                logging.error(
+                    f'AI response is missing team tag answer for text="{text}" response="{response}"'
+                )
+
+    return result_tags

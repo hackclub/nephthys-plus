@@ -109,6 +109,8 @@ class QuestionTag(Table, tablename="QuestionTag"):
 class TeamTag(Table, tablename="Tag"):
     id = Serial(primary_key=True, unique=True)
     name = Text(unique=True)
+    description = Text(null=True)
+    always_tag = Boolean(default=False, db_column_name="alwaysTag")
     created_at = Timestamptz(default=TimestamptzNow(), db_column_name="createdAt")
 
     tag_subscriptions = M2M(table_ref("UserTagSubscription"))

@@ -54,6 +54,20 @@ The old `HACK_CLUB_AI_API_KEY` and `HACK_CLUB_AI_BASE_URL` names are still read 
 
 If you've created category tags, a decision model ([Jev](https://docs.typesafe.ai/)) automatically assigns each new ticket to one, using the tag descriptions. Nephthys calls it at `<AI_BASE_URL>/jev/systemone`, which Hack Club AI provides (Jev access is currently in closed beta on Hack Club AI, so ask for access). Providers without that endpoint will skip categorisation and log an error.
 
+### Team tags (auto-tagging)
+
+Team tags can be configured to automatically tag tickets based on keywords. When creating a team tag in the App Home dashboard, you can:
+
+- Set a **description** with comma-separated keywords (e.g., "pcb, hardware, circuit, schematic")
+- Enable **always auto-tag** to automatically apply the tag to any new ticket whose message contains one of those keywords
+
+Additionally, AI-based team tag selection runs using the same Jev model as category tagging. You can disable this with `AI_TEAM_TAGGING=false`.
+
+<!-- prettier-ignore -->
+| Variable | Required? | Description | Default |
+| -------- | --------- | ----------- | ------- |
+| `AI_TEAM_TAGGING` | Optional | Enable AI team tag selection for new tickets | `true` |
+
 ### AI models
 
 You can configure which models are used for different AI tasks.
