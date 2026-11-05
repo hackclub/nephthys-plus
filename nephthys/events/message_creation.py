@@ -624,14 +624,17 @@ async def generate_team_tags(text: str) -> list[TeamTag]:
     """Generate team tags for a ticket.
 
     Combines "always tag" tags (based on description matching) with AI-selected tags.
+    The "always tag" feature works without an AI API key; AI-based selection requires
+    AI_API_KEY and is controlled by AI_TEAM_TAGGING env var.
     """
     team_tags = await TeamTag.objects()
-    if not team_tags or not ai_client:
+    if not team_tags:
         return []
 
     result_tags: list[TeamTag] = []
 
     # 1. Check for "always tag" team tags whose description matches the ticket
+    # This works WITHOUT an AI API key
     always_tags = [tag for tag in team_tags if tag.always_tag and tag.description]
     for tag in always_tags:
         # Simple keyword matching: check if any word from description appears in text
@@ -644,8 +647,8 @@ async def generate_team_tags(text: str) -> list[TeamTag]:
             result_tags.append(tag)
             logging.info(f"Auto-tagged ticket with always_tag team tag: {tag.name}")
 
-    # 2. AI-based team tag selection (if enabled)
-    if env.ai_team_tagging:
+    # 2. AI-based team tag selection (if enabled and AI client available)
+    if env.ai_team_tagging and ai_client:
         model = env.ai_category_model
 
         try:
