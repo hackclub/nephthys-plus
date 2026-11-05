@@ -13,6 +13,7 @@ dependencies = [
     "authlib>=1.9.1",
     "blockkit>=2.1.2",
     "cryptography>=46.0.0",
+    "httpx>=0.28.1",
     "itsdangerous>=2.2.0",
     "matplotlib>=3.10.3",
     "numpy>=2.3.1",
