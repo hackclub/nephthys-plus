@@ -25,7 +25,21 @@ async def create_team_tag_view_callback(
         return
 
     name = body["view"]["state"]["values"]["tag_name"]["tag_name"]["value"]
-    tag = TeamTag(name=name)
+    description = (
+        body["view"]["state"]["values"]
+        .get("tag_description", {})
+        .get("tag_description", {})
+        .get("value", "")
+    )
+    always_tag_values = (
+        body["view"]["state"]["values"]
+        .get("tag_always_tag", {})
+        .get("tag_always_tag", {})
+        .get("selected_options", [])
+    )
+    always_tag = len(always_tag_values) > 0
+
+    tag = TeamTag(name=name, description=description, always_tag=always_tag)
     await tag.save()
 
     await open_app_home(AppHomeView.TEAM_TAGS, client, user_id)
