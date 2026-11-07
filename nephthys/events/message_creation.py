@@ -448,7 +448,9 @@ def get_forwarded_ticket_user(event: dict[str, Any]) -> str | None:
     if not isinstance(payload, dict) or payload.get("ticket") is not True:
         return None
     source_user_id = payload.get("source_user_id")
-    return source_user_id if isinstance(source_user_id, str) and source_user_id else None
+    return (
+        source_user_id if isinstance(source_user_id, str) and source_user_id else None
+    )
 
 
 def get_message_author_id(event: dict[str, Any]) -> str | None:

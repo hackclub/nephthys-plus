@@ -47,6 +47,7 @@ from nephthys.options.category_tags import get_category_tags
 from nephthys.options.team_tags import get_team_tags
 from nephthys.utils.env import env
 from nephthys.utils.performance import perf_timer
+from nephthys.utils.slack_user import get_user_profile
 from nephthys.views.home import AppHomeView
 
 app = AsyncApp(token=env.slack_bot_token, signing_secret=env.slack_signing_secret)
@@ -371,6 +372,40 @@ async def submit_feedback(ack: AsyncAck, body: Dict[str, Any], client: AsyncWebC
     await Feedback.objects().create(
         ticket=ticket, created_by=submitted_by, rating=rating, text=text
     )
+
+    # Post to feedback channel if configured
+    if env.feedback_channel_id:
+        try:
+            user_profile = await get_user_profile(slack_id)
+            user_display_name = user_profile.display_name()
+
+            # Format rating with emoji
+            rating_emoji = {
+                FeedbackRating.GREAT: "🔥 Great",
+                FeedbackRating.OKAY: "🤷 Okay",
+                FeedbackRating.NOT_GOOD: "👎 Not well",
+            }[rating]
+
+            # Create link to original ticket
+            # Slack message link format: https://hackclub.slack.com/archives/{channel}/p{timestamp_without_dot}
+            ticket_ts_clean = ticket.msg_ts.replace(".", "")
+            ticket_link = f"https://hackclub.slack.com/archives/{env.slack_help_channel}/p{ticket_ts_clean}"
+
+            feedback_text = (
+                f"*New Feedback Received*\n"
+                f"• *User:* {user_display_name} (`{slack_id}`)\n"
+                f"• *Rating:* {rating_emoji}\n"
+            )
+            if text:
+                feedback_text += f"• *Comments:* {text}\n"
+            feedback_text += f"• *Ticket:* <{ticket_link}|View original ticket>"
+
+            await client.chat_postMessage(
+                channel=env.feedback_channel_id,
+                text=feedback_text,
+            )
+        except Exception as e:
+            logging.error(f"Failed to post feedback to channel: {e!r}")
 
     # Show a success dialog (customised to the user's feeling and if they gave textual feedback)
     thank_you_text = "Feedback submitted successfully!"
