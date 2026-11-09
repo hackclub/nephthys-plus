@@ -355,6 +355,24 @@ async def submit_feedback(ack: AsyncAck, body: Dict[str, Any], client: AsyncWebC
         ticket=ticket, created_by=submitted_by, rating=rating, text=text
     )
 
+    if env.feedback_channel_id:
+        try:
+            permalink = await client.chat_getPermalink(
+                channel=env.slack_help_channel, message_ts=ticket.msg_ts
+            )
+            rating_label = {
+                FeedbackRating.GREAT: "🔥 Great",
+                FeedbackRating.OKAY: "🤷 Okay",
+                FeedbackRating.NOT_GOOD: "👎 Not well",
+            }[rating]
+            said = f' said "{text}"' if text else " left feedback"
+            await client.chat_postMessage(
+                channel=env.feedback_channel_id,
+                text=f"<@{slack_id}>{said} ({rating_label}) - <{permalink['permalink']}|ticket>",
+            )
+        except Exception as e:
+            logging.error(f"Failed to post feedback to channel: {e!r}")
+
     # Show a success dialog (customised to the user's feeling and if they gave textual feedback)
     thank_you_text = "Feedback submitted successfully!"
     if text:

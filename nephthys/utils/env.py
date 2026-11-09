@@ -151,6 +151,7 @@ class Environment:
         self.slack_ticket_channel = os.environ.get("SLACK_TICKET_CHANNEL", "unset")
         self.slack_bts_channel = os.environ.get("SLACK_BTS_CHANNEL", "unset")
         self.slack_maintainer_id = os.environ.get("SLACK_MAINTAINER_ID", "unset")
+        self.feedback_channel_id = os.environ.get("FEEDBACK_CHANNEL_ID")
         self.program = os.environ.get("PROGRAM", "summer_of_making")
         self.daily_summary = get_environ_bool("DAILY_SUMMARY", default=True)
         self.daily_summary_max_tickets = int(
