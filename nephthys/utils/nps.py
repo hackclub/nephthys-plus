@@ -5,10 +5,10 @@ from datetime import timezone
 
 from nephthys.database.enums import FeedbackRating
 from nephthys.database.tables import Feedback
+from nephthys.database.tables import NpsAnchor
 from nephthys.utils.env import env
 
 NPS_DAYS = 14
-ANCHOR_EVENT = "nps_anchor"
 
 
 def rating_for(score: int) -> FeedbackRating:
@@ -43,28 +43,29 @@ async def update_nps_anchor(repost: bool = False):
         return
     try:
         text = await nps_text()
-        history = await env.slack_client.conversations_history(
-            channel=channel, limit=200, include_all_metadata=True
-        )
-        anchor = next(
-            (
-                m
-                for m in history["messages"]
-                if m.get("metadata", {}).get("event_type") == ANCHOR_EVENT
-            ),
-            None,
-        )
-        if anchor and not repost:
+        old = await NpsAnchor.objects().where(NpsAnchor.channel_id == channel).first()
+        if old and not repost:
             await env.slack_client.chat_update(
-                channel=channel, ts=anchor["ts"], text=text
+                channel=channel, ts=old.message_ts, text=text
             )
             return
-        msg = await env.slack_client.chat_postMessage(
-            channel=channel, text=text, metadata={"event_type": ANCHOR_EVENT}
-        )
-        await env.slack_client.pins_add(channel=channel, timestamp=msg["ts"])
-        if anchor:
-            await env.slack_client.pins_remove(channel=channel, timestamp=anchor["ts"])
-            await env.slack_client.chat_delete(channel=channel, ts=anchor["ts"])
+        msg = await env.slack_client.chat_postMessage(channel=channel, text=text)
+        await NpsAnchor.delete().where(NpsAnchor.channel_id == channel)
+        await NpsAnchor.insert(NpsAnchor(channel_id=channel, message_ts=msg["ts"]))
+        try:
+            await env.slack_client.pins_add(channel=channel, timestamp=msg["ts"])
+        except Exception as e:
+            logging.error(f"Failed to pin NPS anchor: {e!r}")
+        if old:
+            try:
+                await env.slack_client.pins_remove(
+                    channel=channel, timestamp=old.message_ts
+                )
+            except Exception as e:
+                logging.warning(f"Failed to unpin old NPS anchor: {e!r}")
+            try:
+                await env.slack_client.chat_delete(channel=channel, ts=old.message_ts)
+            except Exception as e:
+                logging.warning(f"Failed to delete old NPS anchor: {e!r}")
     except Exception as e:
         logging.error(f"Failed to update NPS anchor: {e!r}")

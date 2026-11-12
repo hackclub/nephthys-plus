@@ -1,8 +1,8 @@
 from piccolo.columns import Boolean
 from piccolo.columns import Bytea
 from piccolo.columns import ForeignKey
-from piccolo.columns import LazyTableReference
 from piccolo.columns import Integer
+from piccolo.columns import LazyTableReference
 from piccolo.columns import M2M
 from piccolo.columns import OnDelete
 from piccolo.columns import OnUpdate
@@ -192,6 +192,12 @@ class Macro(Table, tablename="Macro"):
     post_as_helper = Boolean(default=False, db_column_name="postAsHelper")
     program = Text(null=True)
     created_at = Timestamptz(default=TimestamptzNow(), db_column_name="createdAt")
+
+
+class NpsAnchor(Table, tablename="nps_anchor"):
+    id = Serial(primary_key=True, unique=True)
+    channel_id = Text(unique=True)
+    message_ts = Text()
 
 
 class HelperToken(Table, tablename="helper_token"):
