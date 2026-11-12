@@ -45,7 +45,10 @@ from nephthys.events.message_deletion import on_message_deletion
 from nephthys.options.category_tags import get_category_tags
 from nephthys.options.team_tags import get_team_tags
 from nephthys.utils.env import env
+from nephthys.utils.nps import rating_for
+from nephthys.utils.nps import update_nps_anchor
 from nephthys.utils.performance import perf_timer
+from nephthys.utils.ticket_methods import get_question_message_link
 from nephthys.views.home import AppHomeView
 
 app = AsyncApp(token=env.slack_bot_token, signing_secret=env.slack_signing_secret)
@@ -308,16 +311,12 @@ async def feedback_button(ack: AsyncAck, body: Dict[str, Any], client: AsyncWebC
         callback_id="submit-feedback",
         blocks=[
             Input(
-                "How well was your question answered?",
+                "How likely are you to recommend this help channel to a friend?",
                 block_id="rating",
                 element=StaticSelect(
                     action_id="rating",
-                    placeholder="Not well/Okay/Great",
-                    options=[
-                        Option("👎 Not well", FeedbackRating.NOT_GOOD),
-                        Option("🤷 Okay", FeedbackRating.OKAY),
-                        Option("🔥 Great", FeedbackRating.GREAT),
-                    ],
+                    placeholder="0 = not at all likely, 10 = extremely likely",
+                    options=[Option(str(n), str(n)) for n in range(11)],
                 ),
             ),
             Input(
@@ -351,26 +350,19 @@ async def submit_feedback(ack: AsyncAck, body: Dict[str, Any], client: AsyncWebC
         raise ValueError(f"Failed to find ticket ticket_id={ticket_id}")
     if not (submitted_by := await User.objects().get(User.slack_id == slack_id)):
         raise ValueError(f"Failed to find user with slack_id={slack_id}")
-    rating = FeedbackRating(rating_value)
+    score = int(rating_value)
+    rating = rating_for(score)
 
     await Feedback.objects().create(
-        ticket=ticket, created_by=submitted_by, rating=rating, text=text
+        ticket=ticket, created_by=submitted_by, rating=rating, score=score, text=text
     )
 
     if env.feedback_channel_id:
         try:
-            permalink = await client.chat_getPermalink(
-                channel=env.slack_help_channel, message_ts=ticket.msg_ts
-            )
-            rating_label = {
-                FeedbackRating.GREAT: "🔥 Great",
-                FeedbackRating.OKAY: "🤷 Okay",
-                FeedbackRating.NOT_GOOD: "👎 Not well",
-            }[rating]
             said = f' said "{text}"' if text else " left feedback"
             await client.chat_postMessage(
                 channel=env.feedback_channel_id,
-                text=f"<@{slack_id}>{said} ({rating_label}) - <{permalink['permalink']}|ticket>",
+                text=f"<@{slack_id}>{said} ({score}/10) - <{get_question_message_link(ticket)}|thread>",
             )
         except Exception as e:
             logging.error(f"Failed to post feedback to channel: {e!r}")
@@ -394,6 +386,7 @@ async def submit_feedback(ack: AsyncAck, body: Dict[str, Any], client: AsyncWebC
         response_action="update",
         view=success_modal.build(),
     )
+    await update_nps_anchor(repost=True)
 
 
 @app.action("add-macro")

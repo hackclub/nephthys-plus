@@ -14,6 +14,7 @@ from starlette.applications import Starlette
 from nephthys.tasks.close_stale import close_stale_tickets
 from nephthys.tasks.daily_stats import send_daily_stats
 from nephthys.tasks.update_helpers import update_helpers
+from nephthys.utils.nps import update_nps_anchor
 from nephthys.utils.delete_thread import process_queue
 from nephthys.utils.env import env
 from nephthys.utils.faq import refresh_faq_entries
@@ -68,6 +69,14 @@ async def main(_app: Starlette):
             )
         else:
             logging.debug("Stale ticket closing has not been configured")
+        if env.feedback_channel_id:
+            scheduler.add_job(
+                update_nps_anchor,
+                "interval",
+                hours=1,
+                max_instances=1,
+                next_run_time=datetime.now(),
+            )
         if env.transcript.faq_canvas_id:
             scheduler.add_job(
                 refresh_faq_entries,

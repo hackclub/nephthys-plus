@@ -36,7 +36,8 @@
                 "reactions:read",
                 "reactions:write",
                 "users:read",
-                "files:write"
+                "files:write",
+                "pins:write"
             ]
         }
     },

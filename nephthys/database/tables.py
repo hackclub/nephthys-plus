@@ -2,6 +2,7 @@ from piccolo.columns import Boolean
 from piccolo.columns import Bytea
 from piccolo.columns import ForeignKey
 from piccolo.columns import LazyTableReference
+from piccolo.columns import Integer
 from piccolo.columns import M2M
 from piccolo.columns import OnDelete
 from piccolo.columns import OnUpdate
@@ -177,6 +178,7 @@ class Feedback(Table, tablename="Feedback"):
         db_column_name="createdById",
     )
     rating = FeedbackRatingColumn()
+    score = Integer(null=True)
     text = Varchar(null=True, length=32000)
     created_at = Timestamptz(default=TimestamptzNow(), db_column_name="createdAt")
 
