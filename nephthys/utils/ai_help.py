@@ -50,13 +50,14 @@ The question is the message labelled QUESTION. Later messages are follow-ups. Th
 
 How to answer:
 1. Start with the FAQ and help channels below. For identity verification, fraud, money/grants, or anything with its own program or team channel, don't guess the details: say who handles it and point to the channel with <#CHANNEL_ID>. That is often the whole answer.
-2. Otherwise search_messages. Use short keyword queries (2-4 words, not sentences) and try other keywords if the results are weak. Answers usually sit in the replies, so call read_thread on a promising result before relying on it. Trust helper and staff replies and official pages over casual chat, and prefer recent messages (check "date").
+2. Otherwise search_messages. Use short keyword queries (2-4 words, not sentences) and try at least 3 different keyword sets before giving up, running independent searches in the same step. Answers usually sit in the replies, so call read_thread on a promising result before relying on it. Trust helper and staff replies and official pages over casual chat, and prefer recent messages (check "date"). If your only source is months old, say so instead of presenting it as current.
 3. Lead with the answer in at most 3 short sentences, addressed to the member. No preamble such as "Based on past answers".
-4. If the question is too vague to answer, ask for the one thing you need (which program, the exact error text, a screenshot) instead of guessing.
-5. If you can't find a reliable answer, say so in one sentence and point to the most relevant channel. Never pad with tangential facts, and never state a rule you didn't see confirmed.
-6. Cite at most 2 sources, only ones that directly support what you say: "(<{permalink}|view message>)", copying "permalink" exactly. Name the author only when who said it matters. For bookmarks, canvases, FAQ and web pages cite the title and exact URL.
+4. If the question is too vague to answer, ask for the one thing you need (which program, the exact error text, a screenshot) instead of guessing. If the member never named a program, ask which one rather than answering for several. When you ask, end by telling them to reply in the thread and then press "BETA ask AI again" under your message.
+5. If you can't find a reliable answer, say so in one sentence and point to the most relevant channel. Never pad with tangential facts, and never state a rule you didn't see confirmed. Never say a program has stopped, ended, or changed, and never give a date, price or amount, unless a message you cite says so; otherwise leave it out or say it is a guess.
+6. Cite at most 2 sources, only ones that directly support what you say: "(<{permalink}|view message>)", copying "permalink" exactly. Never type, build or edit a URL yourself: if a source has no permalink, cite it without a link. Name the author only when who said it matters. For bookmarks, canvases, FAQ and web pages cite the title and exact URL.
 7. Mention channels ONLY as the proper channel token <#CHANNEL_ID>, copied exactly from the lists or tool results (never the plain name, never "#name"). Mention users ONLY as {{USER_ID|name}}, copied exactly as you saw them (never <@...>).
-8. Never give instructions for fraud, abuse, or anything harmful.
+8. A program or product name you don't recognize is not a typo and may be newer than you: search that exact name before answering, and never answer about the nearest thing you do know.
+9. Never give instructions for fraud, abuse, or anything harmful.
 
 Help channels:
 {HELP_CHANNELS}
@@ -301,6 +302,11 @@ class _Run:
 
         text = re.sub(USER_TOKEN, user_sub, text)
         text = re.sub(
+            r"<https?://[^|>/]+/archives/([A-Z0-9]+)/(p\d+)([^|>]*)",
+            lambda m: f"<{WORKSPACE_URL}/archives/{m[1]}/{m[2]}{m[3]}",
+            text,
+        )
+        text = re.sub(
             r"<(https?://[^|>]+)",
             lambda m: "<" + re.sub(r"&(?!amp;)", "&amp;", m[1]),
             text,
@@ -413,7 +419,7 @@ async def answer(channel: str, thread_ts: str) -> str:
                 model=model,
                 messages=messages,
                 max_completion_tokens=MAX_OUTPUT_TOKENS,
-                reasoning_effort="low",
+                reasoning_effort="medium",
                 tools=TOOLS if use_tools else omit,
                 extra_body=provider_routing(model),
             )

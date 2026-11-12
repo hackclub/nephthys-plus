@@ -12,9 +12,8 @@ DISCLAIMER = (
     "check important information. a helper will come by soon to confirm._"
 )
 
-# Thread timestamps that have an AI answer in progress or already posted.
-# Guards against repeated presses of the "BETA ask ai" button.
-_claimed_threads: set[str] = set()
+_running: set[str] = set()
+_last_seen: dict[str, str] = {}
 
 
 async def ask_ai(
@@ -33,15 +32,25 @@ async def ask_ai(
         )
         return False
 
-    if thread_ts in _claimed_threads:
+    if thread_ts in _running:
         await client.chat_postEphemeral(
             channel=channel,
             user=user_id,
             thread_ts=thread_ts,
-            text="The AI has already answered this question (or is answering it now).",
+            text="The AI is answering this question right now.",
         )
         return False
-    _claimed_threads.add(thread_ts)
+    if thread_ts in _last_seen:
+        replies = await client.conversations_replies(channel=channel, ts=thread_ts)
+        if replies["messages"][-1]["ts"] <= _last_seen[thread_ts]:
+            await client.chat_postEphemeral(
+                channel=channel,
+                user=user_id,
+                thread_ts=thread_ts,
+                text="Nothing new in the thread since the AI last answered. Reply first, then ask again.",
+            )
+            return False
+    _running.add(thread_ts)
 
     stream = await client.chat_stream(
         channel=channel,
@@ -55,7 +64,7 @@ async def ask_ai(
     try:
         text = await ai_help.answer(channel, thread_ts)
     except Exception:
-        _claimed_threads.discard(thread_ts)  # allow a retry after a failure
+        _running.discard(thread_ts)
         logging.exception(f"AI help failed for thread_ts={thread_ts}")
         await stream.stop(
             chunks=[TaskUpdateChunk(id="think", title="Failed", status="error")]
@@ -72,6 +81,22 @@ async def ask_ai(
         chunks=[
             TaskUpdateChunk(id="think", title="Thought", status="complete"),
             MarkdownTextChunk(text=f"{DISCLAIMER}\n\n{text}"),
-        ]
+        ],
+        blocks=[
+            {
+                "type": "actions",
+                "elements": [
+                    {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "BETA ask AI again"},
+                        "action_id": "ask_ai",
+                        "value": thread_ts,
+                    }
+                ],
+            }
+        ],
     )
+    replies = await client.conversations_replies(channel=channel, ts=thread_ts)
+    _last_seen[thread_ts] = replies["messages"][-1]["ts"]
+    _running.discard(thread_ts)
     return True

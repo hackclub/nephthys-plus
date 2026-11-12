@@ -120,6 +120,8 @@ async def handle_ask_ai_button(
                         if el.get("action_id") != "ask_ai"
                     ],
                 }
+                if not block["elements"]:
+                    continue
             blocks.append(block)
         await client.chat_update(
             channel=channel,
