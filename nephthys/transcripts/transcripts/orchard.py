@@ -1,5 +1,6 @@
 from nephthys.transcripts.transcript import Transcript
 
+
 class Orchard(Transcript):
     """Transcript for Orchard Support"""
 
@@ -15,7 +16,7 @@ Seb will help you soon, so please wait for a bit.
 If your question has been answered, please hit the button below to mark it as resolved!
     """
 
-    ticket_create: str = f"""Hi (user), welcome back to the Orchard support channel!
+    ticket_create: str = """Hi (user), welcome back to the Orchard support channel!
 Seb will help you soon, so please wait for a bit.
     """
 
