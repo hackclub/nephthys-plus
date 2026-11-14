@@ -90,13 +90,14 @@ async def run_macro(
 
         new_kwargs = kwargs.copy()
         new_kwargs["text"] = text
-        await target_macro.run(ticket, helper, **new_kwargs)
-        await prometheus.delete_message(
-            ts=macro_ts,
-            channel=env.slack_help_channel,
-            reason=f"?{name} macro trigger",
-            actor_slack_id=helper.slack_id,
-        )
+        trigger_gone = await target_macro.run(ticket, helper, **new_kwargs)
+        if not trigger_gone:
+            await prometheus.delete_message(
+                ts=macro_ts,
+                channel=env.slack_help_channel,
+                reason=f"?{name} macro trigger",
+                actor_slack_id=helper.slack_id,
+            )
         return True
 
     await error_msg(f"`?{name}` is not a valid macro.")
