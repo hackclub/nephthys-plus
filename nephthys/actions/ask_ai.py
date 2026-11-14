@@ -42,7 +42,11 @@ async def ask_ai(
         return False
     if thread_ts in _last_seen:
         replies = await client.conversations_replies(channel=channel, ts=thread_ts)
-        if replies["messages"][-1]["ts"] <= _last_seen[thread_ts]:
+        messages = replies.get("messages")
+        if not messages:
+            logging.error("No replies found for thread_ts=%s", thread_ts)
+            return False
+        if messages[-1]["ts"] <= _last_seen[thread_ts]:
             await client.chat_postEphemeral(
                 channel=channel,
                 user=user_id,
@@ -97,6 +101,10 @@ async def ask_ai(
         ],
     )
     replies = await client.conversations_replies(channel=channel, ts=thread_ts)
-    _last_seen[thread_ts] = replies["messages"][-1]["ts"]
+    messages = replies.get("messages")
+    if messages:
+        _last_seen[thread_ts] = messages[-1]["ts"]
+    else:
+        logging.error("No replies found after answering thread_ts=%s", thread_ts)
     _running.discard(thread_ts)
     return True

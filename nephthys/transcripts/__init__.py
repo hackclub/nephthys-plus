@@ -18,6 +18,7 @@ from nephthys.transcripts.transcripts.lift_off import LiftOff
 from nephthys.transcripts.transcripts.lynx import Lynx
 from nephthys.transcripts.transcripts.midnight import Midnight
 from nephthys.transcripts.transcripts.nest import Nest
+from nephthys.transcripts.transcripts.orchard import Orchard
 from nephthys.transcripts.transcripts.outpost import Outpost
 from nephthys.transcripts.transcripts.snowglobe import Snowglobe
 from nephthys.transcripts.transcripts.stardance import Stardance
@@ -52,4 +53,5 @@ transcripts: List[Type[Transcript]] = [
     Capitol,
     Terra,
     Twisted,
+    Orchard,
 ]

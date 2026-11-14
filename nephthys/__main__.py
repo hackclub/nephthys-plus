@@ -14,7 +14,6 @@ from starlette.applications import Starlette
 from nephthys.tasks.close_stale import close_stale_tickets
 from nephthys.tasks.daily_stats import send_daily_stats
 from nephthys.tasks.update_helpers import update_helpers
-from nephthys.utils.nps import update_nps_anchor
 from nephthys.utils.delete_thread import process_queue
 from nephthys.utils.env import env
 from nephthys.utils.faq import refresh_faq_entries
@@ -22,6 +21,7 @@ from nephthys.utils.logging import parse_level_name
 from nephthys.utils.logging import send_heartbeat
 from nephthys.utils.logging import setup_otel_logging
 from nephthys.utils.logging import SlackHandler
+from nephthys.utils.nps import update_nps_anchor
 from nephthys.utils.slack import app as slack_app
 from piccolo_conf import DB
 
