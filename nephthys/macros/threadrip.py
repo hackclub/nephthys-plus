@@ -47,3 +47,5 @@ class ThreadRip(Macro):
             channel=env.slack_help_channel,
             reason=f"?threadrip by <@{helper.slack_id}>: {parts[1].strip()}",
         )
+        # The trigger message was a reply in the thread, so it's already gone.
+        return True
