@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 import sys
 import time
 from base64 import b64encode
@@ -36,6 +37,10 @@ async def send_heartbeat(heartbeat: str, messages: list[str] | None = None):
 # these libraries, so a Slack/network failure would otherwise loop.
 _SLACK_IGNORED_LOGGERS = ("slack_sdk", "aiohttp", "httpx", "opentelemetry")
 _SLACK_DEDUPE_SECONDS = 60
+_OUT_OF_CREDITS_DEDUPE_SECONDS = 3600
+_OUT_OF_CREDITS = re.compile(
+    r"\b402\b|insufficient (credits|funds|balance)|out of credits", re.IGNORECASE
+)
 _in_slack_handler: ContextVar[bool] = ContextVar("in_slack_handler", default=False)
 
 
@@ -44,7 +49,7 @@ class SlackHandler(logging.Handler):
 
     def __init__(self, level: int = logging.WARNING):
         super().__init__(level)
-        self._recent: dict[tuple[str, str], float] = {}
+        self._recent: dict[tuple[str, str | None], float] = {}
         self._tasks: set[asyncio.Task] = set()
 
     def emit(self, record: logging.LogRecord):
@@ -61,22 +66,37 @@ class SlackHandler(logging.Handler):
         except RuntimeError:
             return  # no loop to post from; stderr/OTEL still have it
 
+        levelno, levelname = record.levelno, record.levelname
+        detail = message + (str(record.exc_info[1]) if record.exc_info else "")
+        out_of_credits = levelno >= logging.ERROR and bool(
+            _OUT_OF_CREDITS.search(detail)
+        )
+        if out_of_credits:
+            levelno, levelname = logging.WARNING, "WARNING"
+
         # Drop identical messages within a minute so one outage doesn't spam
         now = time.monotonic()
         self._recent = {
-            k: t for k, t in self._recent.items() if now - t < _SLACK_DEDUPE_SECONDS
+            k: t
+            for k, t in self._recent.items()
+            if now - t
+            < (
+                _OUT_OF_CREDITS_DEDUPE_SECONDS
+                if k[1] is None
+                else _SLACK_DEDUPE_SECONDS
+            )
         }
-        key = (record.name, message)
+        key = (record.name, None if out_of_credits else message)
         if key in self._recent:
             return
         self._recent[key] = now
 
-        text = f"*{record.levelname}* `{record.name}`: {message}"[:3000]
+        text = f"*{levelname}* `{record.name}`: {message}"[:3000]
         extra = []
         if record.exc_info:
             tb = logging.Formatter().formatException(record.exc_info)
             extra.append(f"```{tb[-2900:]}```")
-        if record.levelno >= logging.ERROR and env.slack_maintainer_id:
+        if levelno >= logging.ERROR and env.slack_maintainer_id:
             extra.append(f"cc <@{env.slack_maintainer_id}>")
         task = loop.create_task(self._post(text, extra))
         self._tasks.add(task)
