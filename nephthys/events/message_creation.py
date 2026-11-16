@@ -120,7 +120,7 @@ async def handle_message_in_thread(event: dict[str, Any], db_user: User | None):
         and not ticket_message.first_reply_at
         and ticket_message.status != TicketStatus.CLOSED
     ):
-        await Ticket.update({Ticket.ai_reply_at: datetime.now(UTC)}).where(
+        await Ticket.update({Ticket.first_reply_at: datetime.now(UTC)}).where(
             Ticket.msg_ts == event["thread_ts"]
         )
 
