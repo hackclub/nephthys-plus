@@ -352,6 +352,9 @@ async def handle_new_question(
     if suggestion:
         try:
             await reply_to_ticket(ticket=ticket, client=client, text=suggestion)
+            await Ticket.update({Ticket.first_reply_at: datetime.now(UTC)}).where(
+                (Ticket.msg_ts == ticket.msg_ts) & Ticket.first_reply_at.is_null()
+            )
         except (SlackApiError, ThreadGoneError) as e:
             logging.warning(f"Failed to send FAQ suggestion message: {e}")
 

@@ -1,4 +1,6 @@
 import logging
+from datetime import UTC
+from datetime import datetime
 
 from slack_sdk.models.messages.chunk import MarkdownTextChunk
 from slack_sdk.models.messages.chunk import TaskUpdateChunk
@@ -99,6 +101,9 @@ async def ask_ai(
                 ],
             }
         ],
+    )
+    await Ticket.update({Ticket.first_reply_at: datetime.now(UTC)}).where(
+        (Ticket.msg_ts == thread_ts) & Ticket.first_reply_at.is_null()
     )
     replies = await client.conversations_replies(channel=channel, ts=thread_ts)
     messages = replies.get("messages")
