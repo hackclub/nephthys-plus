@@ -99,7 +99,9 @@ async def average_wait_minutes(
     """Average minutes someone has waited for a first reply from anyone but the poster,
     over recent tickets, without the fastest and slowest 7%.
 
-    Tickets that got a reply count how long they waited. Tickets still waiting
+    Tickets that got a reply count how long they waited. A bot answer (AI help or
+    FAQ suggestion) counts as the reply unless a human replied, which always wins.
+    Tickets still waiting
     count up to now, so a growing backlog pushes the estimate up. Tickets closed
     without any reply (e.g. the poster resolved it themselves) didn't wait
     on anyone, so they're left out. Returns None if there are too few tickets to
@@ -113,6 +115,8 @@ async def average_wait_minutes(
     for tkt in tickets:
         if tkt.first_reply_at:
             waits.append((tkt.first_reply_at - tkt.created_at).total_seconds() / 60)
+        elif tkt.ai_reply_at:
+            waits.append((tkt.ai_reply_at - tkt.created_at).total_seconds() / 60)
         elif tkt.status != TicketStatus.CLOSED:
             waits.append((now - tkt.created_at).total_seconds() / 60)
     if len(waits) < min_tickets:

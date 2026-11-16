@@ -102,8 +102,8 @@ async def ask_ai(
             }
         ],
     )
-    await Ticket.update({Ticket.first_reply_at: datetime.now(UTC)}).where(
-        (Ticket.msg_ts == thread_ts) & Ticket.first_reply_at.is_null()
+    await Ticket.update({Ticket.ai_reply_at: datetime.now(UTC)}).where(
+        (Ticket.msg_ts == thread_ts) & Ticket.ai_reply_at.is_null()
     )
     replies = await client.conversations_replies(channel=channel, ts=thread_ts)
     messages = replies.get("messages")
