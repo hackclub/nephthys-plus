@@ -166,6 +166,7 @@ async def request_repost(channel: str) -> None:
     async with _lock_for(channel):
         if channel not in _dirty_channels:
             return  # a concurrent repost already covered us
+        cleared = False
         try:
             anchor = await get_anchor(channel)
             if not anchor:
@@ -177,11 +178,13 @@ async def request_repost(channel: str) -> None:
             # Clear dirty before posting so triggers during the post get a trailing
             # repost rather than being swallowed.
             _dirty_channels.discard(channel)
+            cleared = True
             await _repost(channel)
         except Exception:
             logging.exception(f"Anchor repost failed in {channel}")
         finally:
-            _dirty_channels.discard(channel)
+            if not cleared:
+                _dirty_channels.discard(channel)
 
 
 def trigger_repost(channel: str) -> None:
