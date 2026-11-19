@@ -167,9 +167,12 @@ async def handle_channel_message(event: dict) -> None:
     if thread_ts and thread_ts == anchor.message_ts and event.get("ts") != thread_ts:
         # People shouldn't reply in the anchor's thread; the bot can't delete their
         # messages, so Prometheus removes them (the anchor isn't a discussion thread).
-        await delete_message(
-            event["ts"], channel, reason="Reply in the channel anchor thread"
-        )
+        try:
+            await delete_message(
+                event["ts"], channel, reason="Reply in the channel anchor thread"
+            )
+        except Exception:
+            logging.exception(f"Failed to delete anchor-thread reply in {channel}")
         return
     if thread_ts and event.get("subtype") != "thread_broadcast":
         # Other threaded replies don't bury the anchor in the channel timeline; ignore them.
