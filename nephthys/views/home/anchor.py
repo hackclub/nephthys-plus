@@ -7,7 +7,9 @@ from nephthys.views.home import AppHomeView
 from nephthys.views.home.components.header import get_header
 
 
-def _preview(text: str, limit: int = 2000) -> str:
+# Slack section text tops out at 3000 chars; stay just under so approvers see as much
+# of what they're approving as possible.
+def _preview(text: str, limit: int = 2900) -> str:
     return text[:limit] + ("..." if len(text) > limit else "")
 
 

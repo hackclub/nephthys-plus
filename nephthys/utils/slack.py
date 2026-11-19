@@ -69,7 +69,11 @@ async def handle_message(event: Dict[str, Any], client: AsyncWebClient):
     ) or event.get("subtype") == "message_deleted"
 
     if event["channel"] == env.slack_help_channel and not is_message_deletion:
-        await handle_channel_message(event)
+        try:
+            await handle_channel_message(event)
+        except Exception:
+            # Anchor upkeep must never block ticket handling for this message.
+            logging.exception("Anchor handling failed for help-channel message")
 
     if event["channel"] == env.slack_help_channel or get_forwarded_ticket_user(event):
         async with perf_timer("Processing message event (total time)"):
