@@ -49,6 +49,12 @@ Program-specific macros can be added from the App Home (see below) without touch
 
 Helpers and admins can add, edit, and delete custom program macros from the **Macros** tab on the bot's App Home. Each macro can optionally be set to keep the ticket open (instead of resolving it) or to run on closed tickets.
 
+### Channel anchor
+
+The anchor is a message Nephthys keeps pinned at the bottom of the help channel (modeled on slack-extra's `/se anchor`) — it's the first thing many thousands of people see, so it lists the current programs and where to ask. Whenever a new message buries it, Nephthys reposts it at the bottom (rate limited to once a minute, deleting the old copy via Prometheus / the user token when available).
+
+Because the anchor is so visible, changing it goes through a helper approval gate rather than letting any one helper edit it directly. From the **Anchor** tab on the bot's App Home, a helper proposes new anchor text; the change only goes live once `ANCHOR_APPROVALS_REQUIRED` distinct helpers (default 3, the proposer counts as one) have approved it. Any helper can reject a pending proposal, and a new proposal replaces the old one.
+
 ### Leaderboard
 
 At midnight UK time each day, you get to see the stats for the day in the team channel, as well as a summary of open tickets that are over 10 days old or haven't had a message in 3 days.

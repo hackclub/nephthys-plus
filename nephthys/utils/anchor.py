@@ -1,0 +1,242 @@
+"""Channel anchor: a message Nephthys keeps pinned at the bottom of a channel.
+
+Modeled on slack-extra's `/se anchor`, but changes to the anchor text go through a
+helper approval gate: a proposed change only goes live once `ANCHOR_APPROVALS_REQUIRED`
+distinct helpers (the proposer counts as one) have approved it. The help channel is the
+first thing many thousands of people see, so no single helper can change it alone.
+
+- Reposts are coalesced and rate limited per channel: a burst of messages gives one
+  trailing repost, not one each.
+- The previous anchor is removed before a new one is posted (via Prometheus / the user
+  token when available, so stray copies never pile up), then the new copy is pinned.
+"""
+
+import asyncio
+import logging
+import time
+from datetime import datetime
+from datetime import timezone
+
+from slack_sdk.errors import SlackApiError
+
+from nephthys.database.tables import Anchor
+from nephthys.database.tables import AnchorApproval
+from nephthys.database.tables import AnchorProposal
+from nephthys.database.tables import User
+from nephthys.utils.env import env
+from nephthys.utils.prometheus import delete_message
+
+MIN_REPOST_SECONDS = 60
+
+# Per-channel coalescing so concurrent triggers produce at most one trailing repost.
+_channel_locks: dict[str, asyncio.Lock] = {}
+_dirty_channels: set[str] = set()
+
+
+def _lock_for(channel: str) -> asyncio.Lock:
+    lock = _channel_locks.get(channel)
+    if lock is None:
+        lock = _channel_locks[channel] = asyncio.Lock()
+    return lock
+
+
+async def is_helper(slack_id: str) -> bool:
+    user = await User.objects().where(User.slack_id == slack_id).first()
+    return bool(user and (user.helper or user.admin))
+
+
+async def get_anchor(channel: str) -> Anchor | None:
+    return await Anchor.objects().where(Anchor.channel_id == channel).first()
+
+
+async def get_proposal(channel: str) -> AnchorProposal | None:
+    return (
+        await AnchorProposal.objects()
+        .where(AnchorProposal.channel_id == channel)
+        .first()
+    )
+
+
+async def get_approvers(proposal_id: int) -> list[str]:
+    rows = await AnchorApproval.select(AnchorApproval.approver).where(
+        AnchorApproval.proposal == proposal_id
+    )
+    return [row["approver"] for row in rows]
+
+
+# --- reposting --------------------------------------------------------------
+
+
+async def _remove_old_anchor(channel: str, ts: str) -> None:
+    try:
+        await env.slack_client.pins_remove(channel=channel, timestamp=ts)
+    except SlackApiError as e:
+        error = e.response.get("error")
+        if error not in ("no_pin", "not_pinned", "message_not_found"):
+            logging.warning(f"Failed to unpin old anchor ts={ts} in {channel}: {error}")
+    await delete_message(ts, channel, reason="Replacing channel anchor")
+
+
+async def _repost(channel: str) -> None:
+    anchor = await get_anchor(channel)
+    if not anchor or not anchor.enabled or not anchor.text:
+        return
+
+    if anchor.message_ts:
+        await _remove_old_anchor(channel, anchor.message_ts)
+
+    try:
+        msg = await env.slack_client.chat_postMessage(
+            channel=channel,
+            text=anchor.text,
+            unfurl_links=False,
+            unfurl_media=False,
+        )
+    except SlackApiError as e:
+        logging.error(f"Failed to post anchor in {channel}: {e.response.get('error')}")
+        return
+
+    await Anchor.update(
+        {Anchor.message_ts: msg["ts"], Anchor.posted_at: datetime.now(timezone.utc)}
+    ).where(Anchor.channel_id == channel)
+
+    try:
+        await env.slack_client.pins_add(channel=channel, timestamp=msg["ts"])
+    except SlackApiError as e:
+        logging.warning(f"Failed to pin anchor in {channel}: {e.response.get('error')}")
+
+
+async def request_repost(channel: str) -> None:
+    """Repost the anchor, coalescing bursts and rate limiting to one per minute."""
+    _dirty_channels.add(channel)
+    async with _lock_for(channel):
+        if channel not in _dirty_channels:
+            return  # a concurrent repost already covered us
+        anchor = await get_anchor(channel)
+        if not anchor:
+            _dirty_channels.discard(channel)
+            return
+        posted_at = anchor.posted_at.timestamp() if anchor.posted_at else 0
+        wait = MIN_REPOST_SECONDS - (time.time() - posted_at)
+        if wait > 0:
+            await asyncio.sleep(wait)
+        _dirty_channels.discard(channel)
+        try:
+            await _repost(channel)
+        except Exception:
+            logging.exception(f"Anchor repost failed in {channel}")
+
+
+def trigger_repost(channel: str) -> None:
+    """Fire-and-forget repost; safe to call from a Slack event handler."""
+    asyncio.create_task(request_repost(channel))
+
+
+async def handle_channel_message(event: dict) -> None:
+    """Repost the anchor when a new message buries it in the help channel."""
+    channel = event.get("channel")
+    if not channel:
+        return
+    anchor = await get_anchor(channel)
+    if not anchor or not anchor.enabled:
+        return
+    if event.get("ts") == anchor.message_ts:
+        return
+    if event.get("bot_id") or event.get("subtype") in (
+        "bot_message",
+        "message_changed",
+        "message_deleted",
+    ):
+        # Bot posts (including deletion notices) must not trigger reposts, or they loop.
+        return
+    if event.get("thread_ts") and event.get("subtype") != "thread_broadcast":
+        # Threaded replies don't bury the anchor in the channel timeline, so ignore them.
+        return
+    trigger_repost(channel)
+
+
+async def ensure_latest(channel: str) -> None:
+    """Repost the anchor if it isn't the channel's latest message (recovers downtime)."""
+    anchor = await get_anchor(channel)
+    if not anchor or not anchor.enabled:
+        return
+    try:
+        history = await env.slack_client.conversations_history(channel=channel, limit=1)
+    except SlackApiError as e:
+        logging.warning(
+            f"Anchor startup check failed in {channel}: {e.response.get('error')}"
+        )
+        return
+    messages = history.get("messages") or []
+    latest_ts = messages[0].get("ts") if messages else None
+    if anchor.message_ts and latest_ts == anchor.message_ts:
+        return
+    await request_repost(channel)
+
+
+# --- proposals and approvals ------------------------------------------------
+
+
+async def _apply_proposal(channel: str, proposal: AnchorProposal) -> None:
+    existing = await get_anchor(channel)
+    if existing:
+        await Anchor.update({Anchor.text: proposal.text, Anchor.enabled: True}).where(
+            Anchor.channel_id == channel
+        )
+    else:
+        await Anchor(channel_id=channel, text=proposal.text, enabled=True).save()
+    # Deleting the proposal cascades to its approvals.
+    await AnchorProposal.delete().where(AnchorProposal.id == proposal.id)
+    await request_repost(channel)
+
+
+async def propose_change(channel: str, text: str, proposer: str) -> AnchorProposal:
+    """Replace any pending proposal with a new one, counting the proposer as approval #1."""
+    await AnchorProposal.delete().where(AnchorProposal.channel_id == channel)
+    proposal = AnchorProposal(channel_id=channel, text=text, proposer=proposer)
+    await proposal.save()
+    await AnchorApproval(proposal=proposal.id, approver=proposer).save()
+    if env.anchor_approvals_required <= 1:
+        await _apply_proposal(channel, proposal)
+    return proposal
+
+
+async def approve_change(channel: str, approver: str) -> dict:
+    """Record an approval. Applies the change once enough distinct helpers approve.
+
+    Returns {"status": "applied"|"recorded"|"already"|"none", "count", "required"}.
+    """
+    proposal = await get_proposal(channel)
+    if not proposal:
+        return {"status": "none", "count": 0, "required": env.anchor_approvals_required}
+
+    approvers = await get_approvers(proposal.id)
+    required = env.anchor_approvals_required
+    if approver not in approvers:
+        await AnchorApproval(proposal=proposal.id, approver=approver).save()
+        approvers.append(approver)
+    else:
+        return {"status": "already", "count": len(approvers), "required": required}
+
+    if len(approvers) >= required:
+        await _apply_proposal(channel, proposal)
+        return {"status": "applied", "count": len(approvers), "required": required}
+    return {"status": "recorded", "count": len(approvers), "required": required}
+
+
+async def reject_change(channel: str) -> bool:
+    """Discard the pending proposal. Returns True if there was one."""
+    proposal = await get_proposal(channel)
+    if not proposal:
+        return False
+    await AnchorProposal.delete().where(AnchorProposal.id == proposal.id)
+    return True
+
+
+async def set_enabled(channel: str, enabled: bool) -> None:
+    anchor = await get_anchor(channel)
+    if not anchor:
+        return
+    await Anchor.update({Anchor.enabled: enabled}).where(Anchor.channel_id == channel)
+    if enabled:
+        await request_repost(channel)

@@ -162,4 +162,5 @@ You may wish to disable the daily summary for every low-traffic support channels
 | -------- | ----------- | ------- |
 | `DAILY_SUMMARY` | Set this to false to disable daily summary messages in the BTS channel | `true` |
 | `CREDIT_NON_HELPERS` | Set this to false to only credit helpers for resolved tickets (non-helpers are never credited) | `true` |
+| `ANCHOR_APPROVALS_REQUIRED` | How many distinct helpers (the proposer counts as one) must approve a change to the channel anchor before it goes live | `3` |
 | `DAILY_SUMMARY_MAX_TICKETS` | Maximum number of not-yet-closed tickets listed in the daily summary | `50` |

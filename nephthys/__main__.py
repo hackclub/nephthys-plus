@@ -14,6 +14,7 @@ from starlette.applications import Starlette
 from nephthys.tasks.close_stale import close_stale_tickets
 from nephthys.tasks.daily_stats import send_daily_stats
 from nephthys.tasks.update_helpers import update_helpers
+from nephthys.utils.anchor import ensure_latest as ensure_anchor_latest
 from nephthys.utils.delete_thread import process_queue
 from nephthys.utils.env import env
 from nephthys.utils.faq import refresh_faq_entries
@@ -89,6 +90,8 @@ async def main(_app: Starlette):
         delete_msg_task = asyncio.create_task(process_queue())
         await update_helpers()
         await refresh_faq_entries()
+        if env.slack_help_channel and env.slack_help_channel != "unset":
+            asyncio.create_task(ensure_anchor_latest(env.slack_help_channel))
         handler = None
         if env.slack_app_token:
             if env.environment == "production":

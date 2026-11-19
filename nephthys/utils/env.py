@@ -158,6 +158,11 @@ class Environment:
             os.environ.get("DAILY_SUMMARY_MAX_TICKETS", 50)
         )
         self.credit_non_helpers = get_environ_bool("CREDIT_NON_HELPERS", default=True)
+        # How many distinct helpers (the proposer counts as one) must approve a
+        # change to the channel anchor before it goes live.
+        self.anchor_approvals_required = max(
+            1, int(os.environ.get("ANCHOR_APPROVALS_REQUIRED", "3"))
+        )
         self.enable_feedback = get_environ_bool("ENABLE_FEEDBACK", default=False)
         self.app_title = os.environ.get("APP_TITLE", "helper heidi")
         self.hca = create_hca_config(self.environment)
