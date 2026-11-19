@@ -1,6 +1,6 @@
 import logging
-from datetime import UTC
 from datetime import datetime
+from datetime import UTC
 
 from slack_sdk.models.messages.chunk import MarkdownTextChunk
 from slack_sdk.models.messages.chunk import TaskUpdateChunk
