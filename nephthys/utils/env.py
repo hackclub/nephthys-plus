@@ -163,6 +163,11 @@ class Environment:
         self.anchor_approvals_required = max(
             1, int(os.environ.get("ANCHOR_APPROVALS_REQUIRED", "3"))
         )
+        # How many days a pending anchor change waits for approvals before it is
+        # discarded. Set to 0 to never expire.
+        self.anchor_proposal_expiry_days = max(
+            0, int(os.environ.get("ANCHOR_PROPOSAL_EXPIRY_DAYS", "21"))
+        )
         self.enable_feedback = get_environ_bool("ENABLE_FEEDBACK", default=False)
         self.app_title = os.environ.get("APP_TITLE", "helper heidi")
         self.hca = create_hca_config(self.environment)

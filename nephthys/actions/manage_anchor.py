@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import re
 from typing import Any
@@ -26,9 +27,13 @@ async def open_propose_anchor_modal(
 ) -> None:
     await ack()
     user_id = body["user"]["id"]
-    if not await is_helper(user_id):
+    # One round-trip for both reads so we open the modal well within Slack's
+    # ~3s trigger_id window.
+    helper, anchor = await asyncio.gather(
+        is_helper(user_id), get_anchor(env.slack_help_channel)
+    )
+    if not helper:
         return
-    anchor = await get_anchor(env.slack_help_channel)
     await client.views_open(
         trigger_id=body["trigger_id"],
         view=get_propose_anchor_modal(anchor.text if anchor else None),

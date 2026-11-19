@@ -228,6 +228,9 @@ class AnchorProposal(Table, tablename="anchor_proposal"):
 
 
 class AnchorApproval(Table, tablename="anchor_approval"):
+    # The migration adds a composite UNIQUE (proposal_id, approver) so a helper can't
+    # approve the same proposal twice; Piccolo can't express a composite unique
+    # constraint on the table class, so it lives only in the migration SQL.
     id = Serial(primary_key=True, unique=True)
     proposal = ForeignKey(
         references=AnchorProposal,
