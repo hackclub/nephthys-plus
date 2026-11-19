@@ -11,6 +11,7 @@ class AppHomeView(Enum):
     CATEGORY_TAGS = "category-tags", "Category Tags"
     MY_STATS = "my-stats", "My Stats"
     MACROS = "macros", "Macros"
+    ANCHOR = "anchor", "Anchor"
 
     def __new__(cls, id: str, label: str):
         member = object.__new__(cls)

@@ -10,6 +10,7 @@ from slack_sdk.web.async_client import AsyncWebClient
 from nephthys.database.tables import User
 from nephthys.utils.performance import perf_timer
 from nephthys.views.home import AppHomeView
+from nephthys.views.home.anchor import get_anchor_view
 from nephthys.views.home.assigned import get_assigned_tickets_view
 from nephthys.views.home.category_tags import get_category_tags_view
 from nephthys.views.home.dashboard import get_dashboard_view
@@ -98,6 +99,8 @@ async def open_app_home(
                     view = await get_stats_view(user)
                 case AppHomeView.MACROS:
                     view = await get_macros_view(user)
+                case AppHomeView.ANCHOR:
+                    view = await get_anchor_view(user)
 
         # Check that the request hasn't been superseded by another request while we were rendering
         user_last_requested_view = last_requested_views.get(user_id)

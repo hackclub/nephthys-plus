@@ -201,6 +201,43 @@ class NpsAnchor(Table, tablename="nps_anchor"):
     message_ts = Text()
 
 
+class Anchor(Table, tablename="anchor"):
+    """The live anchor message kept at the bottom of a channel."""
+
+    id = Serial(primary_key=True, unique=True)
+    channel_id = Text(unique=True)
+    text = Text()
+    enabled = Boolean(default=False)
+    message_ts = Text(null=True)
+    posted_at = Timestamptz(null=True)
+    created_at = Timestamptz(default=TimestamptzNow())
+
+
+class AnchorProposal(Table, tablename="anchor_proposal"):
+    """A pending change to a channel's anchor, awaiting helper approvals.
+
+    At most one proposal exists per channel at a time; a new one replaces it.
+    """
+
+    id = Serial(primary_key=True, unique=True)
+    channel_id = Text(unique=True)
+    text = Text()
+    enabled = Boolean(default=True)
+    proposer = Text()
+    created_at = Timestamptz(default=TimestamptzNow())
+
+
+class AnchorApproval(Table, tablename="anchor_approval"):
+    id = Serial(primary_key=True, unique=True)
+    proposal = ForeignKey(
+        references=AnchorProposal,
+        db_column_name="proposal_id",
+        on_delete=OnDelete.cascade,
+    )
+    approver = Text()
+    created_at = Timestamptz(default=TimestamptzNow())
+
+
 class HelperToken(Table, tablename="helper_token"):
     id = Serial(primary_key=True, unique=True)
     user = ForeignKey(

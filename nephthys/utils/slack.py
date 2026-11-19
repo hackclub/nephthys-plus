@@ -22,6 +22,11 @@ from nephthys.actions.create_team_tag import create_team_tag_btn_callback
 from nephthys.actions.create_team_tag import create_team_tag_view_callback
 from nephthys.actions.edit_category_tag import edit_category_tag_btn_callback
 from nephthys.actions.edit_category_tag import edit_category_tag_view_callback
+from nephthys.actions.manage_anchor import approve_anchor_callback
+from nephthys.actions.manage_anchor import open_propose_anchor_modal
+from nephthys.actions.manage_anchor import propose_anchor_view_callback
+from nephthys.actions.manage_anchor import reject_anchor_callback
+from nephthys.actions.manage_anchor import toggle_anchor_callback
 from nephthys.actions.manage_macros import delete_macro_callback
 from nephthys.actions.manage_macros import macro_form_view_callback
 from nephthys.actions.manage_macros import open_add_macro_modal
@@ -44,6 +49,7 @@ from nephthys.events.message_creation import on_message
 from nephthys.events.message_deletion import on_message_deletion
 from nephthys.options.category_tags import get_category_tags
 from nephthys.options.team_tags import get_team_tags
+from nephthys.utils.anchor import handle_channel_message
 from nephthys.utils.env import env
 from nephthys.utils.nps import rating_for
 from nephthys.utils.nps import update_nps_anchor
@@ -61,6 +67,13 @@ async def handle_message(event: Dict[str, Any], client: AsyncWebClient):
         event.get("subtype") == "message_changed"
         and event["message"].get("subtype") == "tombstone"
     ) or event.get("subtype") == "message_deleted"
+
+    if event["channel"] == env.slack_help_channel and not is_message_deletion:
+        try:
+            await handle_channel_message(event)
+        except Exception:
+            # Anchor upkeep must never block ticket handling for this message.
+            logging.exception("Anchor handling failed for help-channel message")
 
     if event["channel"] == env.slack_help_channel or get_forwarded_ticket_user(event):
         async with perf_timer("Processing message event (total time)"):
@@ -407,3 +420,30 @@ async def delete_macro(ack: AsyncAck, body: Dict[str, Any], client: AsyncWebClie
 @app.view("macro_form")
 async def macro_form(ack: AsyncAck, body: Dict[str, Any], client: AsyncWebClient):
     await macro_form_view_callback(ack, body, client)
+
+
+@app.action("anchor-propose")
+async def anchor_propose(ack: AsyncAck, body: Dict[str, Any], client: AsyncWebClient):
+    await open_propose_anchor_modal(ack, body, client)
+
+
+@app.action("anchor-approve")
+async def anchor_approve(ack: AsyncAck, body: Dict[str, Any], client: AsyncWebClient):
+    await approve_anchor_callback(ack, body, client)
+
+
+@app.action("anchor-reject")
+async def anchor_reject(ack: AsyncAck, body: Dict[str, Any], client: AsyncWebClient):
+    await reject_anchor_callback(ack, body, client)
+
+
+@app.action("anchor-toggle")
+async def anchor_toggle(ack: AsyncAck, body: Dict[str, Any], client: AsyncWebClient):
+    await toggle_anchor_callback(ack, body, client)
+
+
+@app.view("anchor_propose_form")
+async def anchor_propose_form(
+    ack: AsyncAck, body: Dict[str, Any], client: AsyncWebClient
+):
+    await propose_anchor_view_callback(ack, body, client)
