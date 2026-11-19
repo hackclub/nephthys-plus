@@ -233,9 +233,7 @@ async def _apply_proposal(channel: str, proposal: AnchorProposal) -> None:
     if existing:
         await Anchor.update(
             {Anchor.text: proposal.text, Anchor.enabled: proposal.enabled}
-        ).where(
-            Anchor.channel_id == channel
-        )
+        ).where(Anchor.channel_id == channel)
     else:
         await Anchor(
             channel_id=channel, text=proposal.text, enabled=proposal.enabled

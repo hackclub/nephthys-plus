@@ -109,7 +109,11 @@ async def get_anchor_view(user: User | None) -> dict:
                         },
                         {
                             "type": "button",
-                            "text": {"type": "plain_text", "text": ":x: reject", "emoji": True},
+                            "text": {
+                                "type": "plain_text",
+                                "text": ":x: reject",
+                                "emoji": True,
+                            },
                             "action_id": "anchor-reject",
                             "value": str(proposal.id),
                             "style": "danger",
@@ -135,7 +139,11 @@ async def get_anchor_view(user: User | None) -> dict:
         elements = [
             {
                 "type": "button",
-                "text": {"type": "plain_text", "text": ":pencil2: propose a change", "emoji": True},
+                "text": {
+                    "type": "plain_text",
+                    "text": ":pencil2: propose a change",
+                    "emoji": True,
+                },
                 "action_id": "anchor-propose",
                 "style": "primary",
             }
@@ -145,7 +153,10 @@ async def get_anchor_view(user: User | None) -> dict:
             elements.append(
                 {
                     "type": "button",
-                    "text": {"type": "plain_text", "text": f"propose turning anchor {toggle}"},
+                    "text": {
+                        "type": "plain_text",
+                        "text": f"propose turning anchor {toggle}",
+                    },
                     "action_id": "anchor-toggle",
                     "value": toggle,
                 }
