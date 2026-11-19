@@ -2,7 +2,7 @@ def get_propose_anchor_modal(current_text: str | None = None) -> dict:
     return {
         "type": "modal",
         "callback_id": "anchor_propose_form",
-        "title": {"type": "plain_text", "text": ":pushpin: Anchor"},
+        "title": {"type": "plain_text", "text": ":pushpin: Anchor", "emoji": True},
         "submit": {"type": "plain_text", "text": "Propose"},
         "close": {"type": "plain_text", "text": "Cancel"},
         "blocks": [

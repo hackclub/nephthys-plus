@@ -82,7 +82,11 @@ async def get_anchor_view(user: User | None) -> dict:
                     "text": (
                         f":hourglass_flowing_sand: *Pending change* proposed by <@{proposal.proposer}>\n"
                         f"*{len(approvers)}/{required}* approvals: {approver_list}\n\n"
-                        f"{_preview(proposal.text)}"
+                        + (
+                            _preview(proposal.text)
+                            if proposal.enabled
+                            else ":no_entry: Turn the anchor *off*"
+                        )
                     ),
                 },
             }
@@ -97,14 +101,17 @@ async def get_anchor_view(user: User | None) -> dict:
                             "text": {
                                 "type": "plain_text",
                                 "text": ":white_check_mark: approve",
+                                "emoji": True,
                             },
                             "action_id": "anchor-approve",
+                            "value": str(proposal.id),
                             "style": "primary",
                         },
                         {
                             "type": "button",
-                            "text": {"type": "plain_text", "text": ":x: reject"},
+                            "text": {"type": "plain_text", "text": ":x: reject", "emoji": True},
                             "action_id": "anchor-reject",
+                            "value": str(proposal.id),
                             "style": "danger",
                             "confirm": {
                                 "title": {
@@ -128,7 +135,7 @@ async def get_anchor_view(user: User | None) -> dict:
         elements = [
             {
                 "type": "button",
-                "text": {"type": "plain_text", "text": ":pencil2: propose a change"},
+                "text": {"type": "plain_text", "text": ":pencil2: propose a change", "emoji": True},
                 "action_id": "anchor-propose",
                 "style": "primary",
             }
@@ -138,7 +145,7 @@ async def get_anchor_view(user: User | None) -> dict:
             elements.append(
                 {
                     "type": "button",
-                    "text": {"type": "plain_text", "text": f"turn anchor {toggle}"},
+                    "text": {"type": "plain_text", "text": f"propose turning anchor {toggle}"},
                     "action_id": "anchor-toggle",
                     "value": toggle,
                 }

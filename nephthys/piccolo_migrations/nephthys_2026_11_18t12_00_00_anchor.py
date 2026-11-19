@@ -25,6 +25,7 @@ CREATE TABLE anchor_proposal (
     id SERIAL PRIMARY KEY,
     channel_id TEXT NOT NULL UNIQUE,
     text TEXT NOT NULL,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
     proposer TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

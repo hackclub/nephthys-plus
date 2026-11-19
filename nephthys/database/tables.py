@@ -222,6 +222,7 @@ class AnchorProposal(Table, tablename="anchor_proposal"):
     id = Serial(primary_key=True, unique=True)
     channel_id = Text(unique=True)
     text = Text()
+    enabled = Boolean(default=True)
     proposer = Text()
     created_at = Timestamptz(default=TimestamptzNow())
 

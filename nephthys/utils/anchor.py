@@ -231,23 +231,29 @@ async def _apply_proposal(channel: str, proposal: AnchorProposal) -> None:
         return
     existing = await get_anchor(channel)
     if existing:
-        # Only the text changes; whether the anchor is live is controlled by the
-        # on/off toggle, so an approval never re-enables an anchor turned off.
-        await Anchor.update({Anchor.text: proposal.text}).where(
+        await Anchor.update(
+            {Anchor.text: proposal.text, Anchor.enabled: proposal.enabled}
+        ).where(
             Anchor.channel_id == channel
         )
     else:
-        await Anchor(channel_id=channel, text=proposal.text, enabled=True).save()
+        await Anchor(
+            channel_id=channel, text=proposal.text, enabled=proposal.enabled
+        ).save()
     # Deleting the proposal cascades to its approvals.
     await AnchorProposal.delete().where(AnchorProposal.id == proposal.id)
-    await request_repost(channel)
+    trigger_repost(channel)
 
 
-async def propose_change(channel: str, text: str, proposer: str) -> AnchorProposal:
+async def propose_change(
+    channel: str, text: str, proposer: str, enabled: bool = True
+) -> AnchorProposal:
     """Replace any pending proposal with a new one, counting the proposer as approval #1."""
     async with _proposal_lock_for(channel):
         await AnchorProposal.delete().where(AnchorProposal.channel_id == channel)
-        proposal = AnchorProposal(channel_id=channel, text=text, proposer=proposer)
+        proposal = AnchorProposal(
+            channel_id=channel, text=text, proposer=proposer, enabled=enabled
+        )
         await proposal.save()
         await AnchorApproval(proposal=proposal.id, approver=proposer).save()
         if env.anchor_approvals_required <= 1:
@@ -255,22 +261,18 @@ async def propose_change(channel: str, text: str, proposer: str) -> AnchorPropos
         return proposal
 
 
-async def approve_change(channel: str, approver: str) -> dict:
-    """Record an approval. Applies the change once enough distinct helpers approve.
+async def approve_change(channel: str, approver: str, proposal_id: int) -> dict:
+    """Record an approval for a specific proposal. Applies it once enough helpers approve.
 
     Returns {"status": "applied"|"recorded"|"already"|"none", "count", "required"}.
     """
     async with _proposal_lock_for(channel):
         proposal = await get_proposal(channel)
-        if not proposal:
-            return {
-                "status": "none",
-                "count": 0,
-                "required": env.anchor_approvals_required,
-            }
+        required = env.anchor_approvals_required
+        if not proposal or proposal.id != proposal_id:
+            return {"status": "none", "count": 0, "required": required}
 
         approvers = await get_approvers(proposal.id)
-        required = env.anchor_approvals_required
         if approver in approvers:
             return {"status": "already", "count": len(approvers), "required": required}
         await AnchorApproval(proposal=proposal.id, approver=approver).save()
@@ -282,20 +284,22 @@ async def approve_change(channel: str, approver: str) -> dict:
         return {"status": "recorded", "count": len(approvers), "required": required}
 
 
-async def reject_change(channel: str) -> bool:
+async def reject_change(channel: str, proposal_id: int) -> bool:
     """Discard the pending proposal. Returns True if there was one."""
     async with _proposal_lock_for(channel):
         proposal = await get_proposal(channel)
-        if not proposal:
+        if not proposal or proposal.id != proposal_id:
             return False
         await AnchorProposal.delete().where(AnchorProposal.id == proposal.id)
         return True
 
 
-async def set_enabled(channel: str, enabled: bool) -> None:
-    anchor = await get_anchor(channel)
-    if not anchor:
+async def notify_bts(text: str) -> None:
+    if not env.slack_bts_channel or env.slack_bts_channel == "unset":
         return
-    await Anchor.update({Anchor.enabled: enabled}).where(Anchor.channel_id == channel)
-    if enabled:
-        await request_repost(channel)
+    try:
+        await env.slack_client.chat_postMessage(
+            channel=env.slack_bts_channel, text=text, unfurl_links=False
+        )
+    except SlackApiError as e:
+        logging.warning(f"Failed to notify BTS about anchor: {e.response.get('error')}")
