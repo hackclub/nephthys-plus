@@ -7,8 +7,10 @@ first thing many thousands of people see, so no single helper can change it alon
 
 - Reposts are coalesced and rate limited per channel: a burst of messages gives one
   trailing repost, not one each.
-- The previous anchor is removed before a new one is posted (via Prometheus / the user
-  token when available, so stray copies never pile up), then the new copy is pinned.
+- The anchor is posted, pinned and deleted with the bot token (the bot owns it): the
+  old copy is removed before the new one is posted, so stray copies never pile up.
+- Prometheus is used only to delete replies people post in the anchor's thread, which
+  the bot cannot delete itself (as slack-extra's `/se anchor` does).
 """
 
 import asyncio
@@ -67,14 +69,25 @@ async def get_approvers(proposal_id: int) -> list[str]:
 # --- reposting --------------------------------------------------------------
 
 
+_CLEANUP_OK = ("no_pin", "not_pinned", "message_not_found", "cant_delete_message")
+
+
 async def _remove_old_anchor(channel: str, ts: str) -> None:
+    """Unpin and delete the previous anchor. The bot posted it, so the bot deletes it."""
     try:
         await env.slack_client.pins_remove(channel=channel, timestamp=ts)
     except SlackApiError as e:
         error = e.response.get("error")
-        if error not in ("no_pin", "not_pinned", "message_not_found"):
+        if error not in _CLEANUP_OK:
             logging.warning(f"Failed to unpin old anchor ts={ts} in {channel}: {error}")
-    await delete_message(ts, channel, reason="Replacing channel anchor")
+    try:
+        await env.slack_client.chat_delete(channel=channel, ts=ts)
+    except SlackApiError as e:
+        error = e.response.get("error")
+        if error not in _CLEANUP_OK:
+            logging.warning(
+                f"Failed to delete old anchor ts={ts} in {channel}: {error}"
+            )
 
 
 async def _repost(channel: str) -> None:
@@ -149,8 +162,17 @@ async def handle_channel_message(event: dict) -> None:
     ):
         # Bot posts (including deletion notices) must not trigger reposts, or they loop.
         return
-    if event.get("thread_ts") and event.get("subtype") != "thread_broadcast":
-        # Threaded replies don't bury the anchor in the channel timeline, so ignore them.
+
+    thread_ts = event.get("thread_ts")
+    if thread_ts and thread_ts == anchor.message_ts and event.get("ts") != thread_ts:
+        # People shouldn't reply in the anchor's thread; the bot can't delete their
+        # messages, so Prometheus removes them (the anchor isn't a discussion thread).
+        await delete_message(
+            event["ts"], channel, reason="Reply in the channel anchor thread"
+        )
+        return
+    if thread_ts and event.get("subtype") != "thread_broadcast":
+        # Other threaded replies don't bury the anchor in the channel timeline; ignore them.
         return
     trigger_repost(channel)
 
