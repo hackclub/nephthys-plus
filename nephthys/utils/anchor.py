@@ -16,6 +16,7 @@ import asyncio
 import logging
 import time
 from datetime import datetime
+from datetime import timedelta
 from datetime import timezone
 
 from slack_sdk.errors import SlackApiError
@@ -29,6 +30,11 @@ from nephthys.utils.prometheus import delete_message
 
 MIN_REPOST_SECONDS = 60
 
+# Message subtypes that actually bury the anchor and so warrant a repost. A message
+# with no subtype always counts; everything else (joins, leaves, topic changes, …)
+# does not. Mirrors message_creation.ALLOWED_SUBTYPES.
+_REPOST_TRIGGER_SUBTYPES = ("file_share", "me_message", "thread_broadcast")
+
 # Per-channel coalescing so concurrent triggers produce at most one trailing repost.
 # These are in-memory, so correctness assumes a single bot process (as deployed today).
 _channel_locks: dict[str, asyncio.Lock] = {}
@@ -36,6 +42,9 @@ _dirty_channels: set[str] = set()
 # Serialises propose/approve/apply per channel so concurrent approvals can't double
 # apply, and a new proposal can't race the UNIQUE(channel_id) constraint.
 _proposal_locks: dict[str, asyncio.Lock] = {}
+# Keep strong references to fire-and-forget repost tasks so they aren't garbage
+# collected mid-run (per the asyncio.create_task docs).
+_background_tasks: set[asyncio.Task] = set()
 
 
 def _lock_for(channel: str) -> asyncio.Lock:
@@ -61,12 +70,25 @@ async def get_anchor(channel: str) -> Anchor | None:
     return await Anchor.objects().where(Anchor.channel_id == channel).first()
 
 
+def _is_expired(proposal: AnchorProposal) -> bool:
+    days = env.anchor_proposal_expiry_days
+    if days <= 0:
+        return False
+    return proposal.created_at < datetime.now(timezone.utc) - timedelta(days=days)
+
+
 async def get_proposal(channel: str) -> AnchorProposal | None:
-    return (
+    proposal = (
         await AnchorProposal.objects()
         .where(AnchorProposal.channel_id == channel)
         .first()
     )
+    if proposal and _is_expired(proposal):
+        # Drop a proposal that sat unapproved past the expiry window, so it can't
+        # be approved later by helpers who've lost the original context.
+        await AnchorProposal.delete().where(AnchorProposal.id == proposal.id)
+        return None
+    return proposal
 
 
 async def get_approvers(proposal_id: int) -> list[str]:
@@ -144,24 +166,29 @@ async def request_repost(channel: str) -> None:
     async with _lock_for(channel):
         if channel not in _dirty_channels:
             return  # a concurrent repost already covered us
-        anchor = await get_anchor(channel)
-        if not anchor:
-            _dirty_channels.discard(channel)
-            return
-        posted_at = anchor.posted_at.timestamp() if anchor.posted_at else 0
-        wait = MIN_REPOST_SECONDS - (time.time() - posted_at)
-        if wait > 0:
-            await asyncio.sleep(wait)
-        _dirty_channels.discard(channel)
         try:
+            anchor = await get_anchor(channel)
+            if not anchor:
+                return
+            posted_at = anchor.posted_at.timestamp() if anchor.posted_at else 0
+            wait = MIN_REPOST_SECONDS - (time.time() - posted_at)
+            if wait > 0:
+                await asyncio.sleep(wait)
+            # Clear dirty before posting so triggers during the post get a trailing
+            # repost rather than being swallowed.
+            _dirty_channels.discard(channel)
             await _repost(channel)
         except Exception:
             logging.exception(f"Anchor repost failed in {channel}")
+        finally:
+            _dirty_channels.discard(channel)
 
 
 def trigger_repost(channel: str) -> None:
     """Fire-and-forget repost; safe to call from a Slack event handler."""
-    asyncio.create_task(request_repost(channel))
+    task = asyncio.create_task(request_repost(channel))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
 
 async def handle_channel_message(event: dict) -> None:
@@ -195,6 +222,11 @@ async def handle_channel_message(event: dict) -> None:
         return
     if thread_ts and event.get("subtype") != "thread_broadcast":
         # Other threaded replies don't bury the anchor in the channel timeline; ignore them.
+        return
+    subtype = event.get("subtype")
+    if subtype is not None and subtype not in _REPOST_TRIGGER_SUBTYPES:
+        # Only real posts bury the anchor. System messages like channel joins/leaves
+        # don't, and Slack stops rendering join lines in large channels anyway.
         return
     trigger_repost(channel)
 
@@ -230,6 +262,7 @@ async def _apply_proposal(channel: str, proposal: AnchorProposal) -> None:
     if not still:
         return
     existing = await get_anchor(channel)
+    old_ts = existing.message_ts if existing else None
     if existing:
         await Anchor.update(
             {Anchor.text: proposal.text, Anchor.enabled: proposal.enabled}
@@ -240,7 +273,14 @@ async def _apply_proposal(channel: str, proposal: AnchorProposal) -> None:
         ).save()
     # Deleting the proposal cascades to its approvals.
     await AnchorProposal.delete().where(AnchorProposal.id == proposal.id)
-    trigger_repost(channel)
+    if proposal.enabled:
+        trigger_repost(channel)
+    elif old_ts:
+        # Turning the anchor off removes the pinned message too, not just future reposts.
+        await _remove_old_anchor(channel, old_ts)
+        await Anchor.update({Anchor.message_ts: None}).where(
+            Anchor.channel_id == channel
+        )
 
 
 async def propose_change(

@@ -53,7 +53,7 @@ Helpers and admins can add, edit, and delete custom program macros from the **Ma
 
 The anchor is a message Nephthys keeps pinned at the bottom of the help channel (modeled on slack-extra's `/se anchor`) — it's the first thing many thousands of people see, so it lists the current programs and where to ask. Whenever a new message buries it, Nephthys reposts it at the bottom (rate limited to once a minute), posting, pinning and deleting it with the bot token. Replies people post in the anchor's thread are removed via Prometheus, since the bot can't delete other people's messages.
 
-Because the anchor is so visible, changing it goes through a helper approval gate rather than letting any one helper edit it directly. From the **Anchor** tab on the bot's App Home, a helper proposes new anchor text; the change only goes live once `ANCHOR_APPROVALS_REQUIRED` distinct helpers (default 3, the proposer counts as one) have approved it. Any helper can reject a pending proposal, and a new proposal replaces the old one.
+Because the anchor is so visible, changing it goes through a helper approval gate rather than letting any one helper edit it directly. From the **Anchor** tab on the bot's App Home, a helper proposes new anchor text (or proposes turning the anchor on/off); the change only goes live once `ANCHOR_APPROVALS_REQUIRED` distinct helpers (default 3, the proposer counts as one) have approved it, and each proposal and approval is announced in the team channel. Any helper can reject a pending proposal, a new proposal replaces the old one, and a proposal left unapproved for `ANCHOR_PROPOSAL_EXPIRY_DAYS` (default 21) is discarded. Turning the anchor off also removes the pinned message.
 
 ### Leaderboard
 
