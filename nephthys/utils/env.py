@@ -148,7 +148,7 @@ class Environment:
         self.base_url: str = get_base_url()
 
         self.slack_help_channel = os.environ.get("SLACK_HELP_CHANNEL", "unset")
-        self.slack_ticket_channel = os.environ.get("SLACK_TICKET_CHANNEL", "unset")
+        self.slack_ticket_channel = os.environ.get("SLACK_TICKET_CHANNEL")
         self.slack_bts_channel = os.environ.get("SLACK_BTS_CHANNEL", "unset")
         self.slack_maintainer_id = os.environ.get("SLACK_MAINTAINER_ID", "unset")
         self.feedback_channel_id = os.environ.get("FEEDBACK_CHANNEL_ID")
@@ -217,12 +217,28 @@ class Environment:
             transcript_kwargs = {
                 "program_name": self.program,
                 "help_channel": self.slack_help_channel,
-                "ticket_channel": self.slack_ticket_channel,
+                "ticket_channel": self.slack_ticket_channel or "",
                 "team_channel": self.slack_bts_channel,
                 "program_owner": self.slack_maintainer_id,
             }
-            if os.environ.get("FAQ_LINK"):
-                transcript_kwargs["faq_link"] = os.environ["FAQ_LINK"]
+            for field in (
+                "faq_link",
+                "faq_canvas_id",
+                "faq_events_question",
+                "faq_suggestion",
+                "event_channel_suggestion",
+                "first_ticket_create",
+                "ticket_create",
+                "wait_time_estimate",
+                "resolve_ticket_button",
+                "ticket_resolve",
+                "ticket_resolve_stale",
+                "ticket_reopen",
+                "thread_broadcast_delete",
+                "ticket_feedback_text",
+            ):
+                if value := os.environ.get(field.upper()):
+                    transcript_kwargs[field] = value.replace("\\n", "\n")
             self.transcript = Transcript(**transcript_kwargs)
 
         self.slack_client = AsyncWebClient(token=self.slack_bot_token)

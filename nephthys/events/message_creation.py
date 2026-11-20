@@ -219,7 +219,7 @@ async def handle_new_question(
             profile_pic=author.profile_pic_512x() or "",
         )
 
-    ticket_message_ts = ticket_message["ts"]
+    ticket_message_ts = ticket_message["ts"] if ticket_message else event["ts"]
     if not ticket_message_ts:
         logging.error(f"Ticket message has no ts: {ticket_message}")
         return
@@ -229,7 +229,11 @@ async def handle_new_question(
         if past_tickets == 0
         else env.transcript.ticket_create.replace("(user)", author.display_name())
     )
-    ticket_url = f"https://hackclub.slack.com/archives/{env.slack_ticket_channel}/p{ticket_message_ts.replace('.', '')}"
+    ticket_url = (
+        f"https://hackclub.slack.com/archives/{env.slack_ticket_channel}/p{ticket_message_ts.replace('.', '')}"
+        if ticket_message
+        else ""
+    )
 
     wait_estimate = None
     if env.transcript.wait_time_estimate:
@@ -304,7 +308,7 @@ async def handle_new_question(
     if team_tag:
         await ticket.add_m2m(team_tag, m2m=Ticket.team_tags)
 
-    if category_tag or team_tag:
+    if ticket_message and (category_tag or team_tag):
         blocks = await backend_message_blocks(
             author_user_id=author_id,
             msg_ts=event["ts"],

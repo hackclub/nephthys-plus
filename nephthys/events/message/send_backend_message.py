@@ -133,6 +133,9 @@ async def send_backend_message(
 ):
     """Send a "backend" message to the tickets channel with ticket details."""
 
+    if not env.slack_ticket_channel:
+        return None
+
     return await client.chat_postMessage(
         channel=env.slack_ticket_channel,
         text=backend_message_fallback_text(author_user_id, description, reopened_by),

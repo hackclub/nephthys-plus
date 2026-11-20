@@ -1,110 +1,70 @@
-# Deploying Nephthys on Hack Club Coolify
+# Deploying Nephthys on Orchard
 
-Here's a mostly-complete guide to deploying a new instance of Nephthys on the Hack Club Coolify.
+The easiest way to run Nephthys in production is the **Nephthys Plus** template on [Orchard](https://github.com/hackclub/orchard). The template creates the Postgres database, builds this repository's `Dockerfile`, wires every environment variable, and sets up the domain and HTTPS. You only create the Slack app and fill in a form.
 
-You can also follow it to deploy Nephthys elsewhere, but you'll have to replace the Coolify-specific steps with writing docker compose files, or whatever else floats your boat.
+You can also run Nephthys elsewhere (a Docker compose file, another PaaS). Use the [configuration reference](configuration.md) for the environment variables and replace the Orchard steps with your own.
 
-## Deploying the database to Coolify
+## 1. Creating the Slack app
 
-1. Navigate to the Nephthys project on the Hack Club HQ Coolify
-2. Navigate to the Production environment and add a new resource
-3. To add the database, select **PostgreSQL**
-4. Select the **coolify-app-server-b** server (as it's currently recommended)
-5. Select standard PostgreSQL
-6. Update the database name to something useful like "Flavorbase" or "Construct Data". Perhaps add a description too.
-7. You'll need the **Postgres URL (internal)** later, so write it down or idk, keep the tab open or something
-8. You can start the database now, or later. Just don't forget to do it
-
-## Deploying Nephthys to Coolify
-
-1. In the same Production environment, add a new application
-2. Select **Private Repository (with GitHub App)** (this ensures auto-deploys work)
-3. Select the **coolify-app-server-b** server (to match the database)
-4. Use the **coolify-hackclub** GitHub app (because everyone else uses it, I guess)
-5. Select the **nephthys** repository
-6. Select **Dockerfile** as the Build Pack
-
-   ![Screenshot of the Coolify UI](deployment-1.png)
-
-7. Update the name and description to be descriptive
-8. Update the domain to be a custom one you've set up on [hackclub/dns](https://github.com/hackclub/dns) (it should be `[something].nephthys.hackclub.com`) (or leave the ugly default domain)
-9. Environment variables! We'll set them later
-
-## Creating the Slack app
-
-Note: These steps have to be done by a Workspace Admin (otherwise it will be unable to fully delete threads in the tickets channel).
+Do this first. It has to be done by a Workspace Admin, otherwise the bot can't fully delete threads in the tickets channel.
 
 1. Go to <https://api.slack.com/apps>
 2. Create New App > From a manifest
 3. Select YAML. Paste the [manifest.yml](../manifest.yml) file (but don't submit it yet)
-4. Update the `https://nephthys.hackclub.com/` URLs in the manifest to match the bot's domain (see above), and update the `name`, `description`, and bot user's `display_name`.
-5. Review the app's permissions and authorise it
-6. Click **OAuth & Permissions** in the sidebar, and hit **Install to Hack Club**
+4. Replace the `https://nephthys.hackclub.com/` URLs in the manifest with the domain you'll deploy on (for example `https://help.example.com/`), and update the `name`, `description`, and bot user's `display_name`
+5. Review the app's permissions and create it
+6. Click **OAuth & Permissions** in the sidebar and install the app to your workspace
+7. Copy the **Bot User OAuth Token** (`xoxb-...`) and **User OAuth Token** (`xoxp-...`) from that page, and the **Signing Secret** from **Basic Information**
 
-## Setting environment variables
+You'll also need the IDs (`C...`) of the channels the bot uses: the help channel where people ask questions, the behind-the-scenes (BTS) channel for your helpers, and optionally a tickets channel (where a message for every open ticket is posted for helpers; if you don't set one, no ticket messages are posted and helpers work from the question threads) and a heartbeat channel for log messages. Your own Slack user ID (`U...`) is used as the maintainer, who gets pinged when the bot breaks.
 
-1. Go back to the Nephthys resource you created in Coolify, and click on **Configuration** > **Environment Variables**. Click **Developer view** (production environment variables) to make it easier to add all the variables.
-2. Add the required environment variables (see [.env.sample](../.env.sample) for an up-to-date list of environment variables):
+## 2. Deploying the template
 
-   ```bash
-   # Keep these as they are
-   ENVIRONMENT="production"
-   PORT=3000
-   # Copy these from the Slack bot OAuth & Permissions screen
-   SLACK_USER_TOKEN="xoxp-..."
-   SLACK_BOT_TOKEN="xoxb-..."
-   # Slack bot basic information screen
-   SLACK_SIGNING_SECRET="..."
-   # This should probably be your Slack ID
-   SLACK_MAINTAINER_ID="U..."
-   # Channels that will be used by the bot
-   SLACK_HEARTBEAT_CHANNEL="C..."
-   SLACK_TICKET_CHANNEL="C..."
-   SLACK_BTS_CHANNEL="C..."
-   SLACK_HELP_CHANNEL="C..."
-   # Copy this from the PostgreSQL resource you created earlier
-   DATABASE_URL="postgres://postgres:blahblah@somewhere:5432/postgres"
-   # Pick a transcript from the transcripts/ folder (your event will probably have its own)
-   PROGRAM="help"
-   # Choose a title to be shown to helpers at the top of the App Home
-   APP_TITLE="Heidi the Assistant"
-   # Set this to the URL where the bot will be hosted
-   BASE_URL="https://summer.nephthys.hackclub.com"
-   ```
+1. In Orchard, open the **New** page and search for **Nephthys Plus** (or pick it from the bot category)
+2. Fill in the parameters:
 
-3. There's some optional environment variables that are recommended to set:
+   | Parameter | What to enter |
+   | --------- | ------------- |
+   | App Name | Name for the app; the database is named `<app name>-db` |
+   | Domain | The domain you used in the Slack manifest, e.g. `help.example.com`. Point its DNS at your Orchard cluster first |
+   | Slack Bot Token / User Token / Signing Secret | From step 1 |
+   | BTS / Help Channel ID | Channel IDs, `C...` |
+   | Ticket Channel ID | Optional. Leave empty to post no ticket messages |
+   | Heartbeat Channel ID | Optional log channel |
+   | Maintainer User ID | Your Slack ID, `U...` |
+   | Program | The name shown in messages. Use a name that is not in `nephthys/transcripts/transcripts/` so your channel IDs and the settings below are used. A built-in name (like the default `help`) uses that program's own hardcoded channels and text instead |
+   | FAQ URL | Optional link to your FAQ, used in welcome messages and the FAQ macro |
+   | App Title | Shown to helpers at the top of the App Home and in the Lobby |
 
-   ```bash
-   # Hack Club AI API key for ticket titles, category tags and credit decisions (highly recommended)
-   AI_API_KEY="sk-hc-v1-..."
-   # Socket Mode: no public request URL needed (create an app-level token with connections:write)
-   SLACK_APP_TOKEN="xapp-..."
-   # Audited message/thread deletion for ?threadrip and ?deleteop (falls back to SLACK_USER_TOKEN admin)
-   PROMETHEUS_API_KEY="..."
-   # Max tickets listed in the daily summary (default 50)
-   DAILY_SUMMARY_MAX_TICKETS=12
-   # Set the log level (defaults to "WARNING" in production)
-   LOG_LEVEL="INFO"
-   # Allow the poster of a question to give feedback after their ticket is resolved
-   # Feedback is stored in the "Feedback" table. Disabled by default.
-   ENABLE_FEEDBACK=true
-   ```
+   Everything else is optional; see [Optional settings](#optional-settings).
 
-   For a full list of configuration options available (including changing the LLM provider), see [configuration.md](configuration.md).
+3. Deploy. Orchard creates the database, builds the image and deploys it. The first build takes a few minutes
 
-4. Don't forget to click **Save All Environment Variables**
+The template gives the app and database 100m CPU and 512 MiB memory each. Adjust them on the deployed resources if your workspace needs more.
 
-## Some final pre-requisites
+## 3. Final prerequisites
 
-1. Add the bot to the BTS channel, help channel, tickets channel, and heartbeat channel
-2. Add the user who authorised the bot (probably you!) to (at least) the tickets channel
-3. Ensure your DNS PR has been made and merged (if applicable)
-4. You can also set a profile picture for the Slack bot in the Slack app settings at this point
-5. The database should be started by this point
+1. Invite the bot to the BTS and help channels, and to the tickets and heartbeat channels if you set them. Slack hides channels from a bot that isn't a member, and the bot won't start if it can't post to the heartbeat channel
+2. If you use a tickets channel, add the user who installed the Slack app (probably you!) to it
+3. Make sure your domain's DNS record exists
+4. You can also set a profile picture for the bot in the Slack app settings
 
-## Deploying
+## 4. Checking it works
 
-1. Press **Deploy** on the new Nephthys resource in Coolify
-2. It will take some time to build, deploy, and start
-3. You should see a message in the heartbeats channel and the bot should respond to messages in the help channel
-   - If it isn't responding to anything, check the logs in Coolify for errors, and double-check all the URLs in the Slack app settings are valid
+A message should show up in the heartbeat channel, and the bot should respond to messages in the help channel. If it doesn't, check the app's logs in Orchard and make sure the request URLs in the Slack app (**Event Subscriptions** and **Interactivity & Shortcuts**) match your domain and end in `/slack/events`.
+
+## Optional settings
+
+All of these are template parameters, and map to the environment variables in [configuration.md](configuration.md). To change one later, edit the parameter and redeploy (or edit the environment variable on the app).
+
+- **AI API key and base URL**: ticket titles and category tags. Defaults to Hack Club AI. If you use another provider, pick one that doesn't train on your prompts. The AI model parameters and category tagging switch are in the same section
+- **Slack App Token** (`xapp-...`, needs `connections:write`): turns on socket mode, so Slack doesn't need a public URL
+- **Helper OAuth client ID, client secret and token encryption key**: let helpers connect their Slack accounts so macros can delete their own trigger messages. Set all three and add `https://your-domain/slack/oauth/callback` to the Slack app's redirect URLs. Generate the key with `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`
+- **HCA client ID and secret**: the Lobby and API keys. Create an OAuth app on [Hack Club Auth](https://auth.hackclub.com/developer/apps/new) with the `slack_id` scope and the redirect URI `https://your-domain/oauth/callback`. Set both or neither. The session secret is generated for you
+- **Custom messages**: when Program isn't a built-in name, you can change the bot's messages by adding environment variables to the app, such as `TICKET_CREATE`, `FIRST_TICKET_CREATE`, `TICKET_RESOLVE` or `RESOLVE_TICKET_BUTTON`, plus the FAQ settings (`FAQ_CANVAS_ID` turns on AI linking to the exact FAQ answer). See [Custom program text](configuration.md#custom-program-text) for the full list. Macro replies keep their defaults
+- **Prometheus API key**: audited deletion for `?threadrip` and `?deleteop`
+- **Ticket feedback, daily summary, credit non-helpers, stale ticket days, log level**: feature switches, see [configuration.md](configuration.md)
+
+## Updating
+
+The template builds from the `main` branch of this repository. Redeploy the app in Orchard to pick up new commits. Database migrations are applied by the app on start.

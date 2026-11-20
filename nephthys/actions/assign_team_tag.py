@@ -95,6 +95,6 @@ async def assign_team_tag_callback(
             channel=u["id"],
             text=(
                 f"New ticket for {formatted_tags}! *{ticket.title or ticket.description}*\n"
-                f"<{url}|ticket> <{ticket_url}|bts ticket>"
+                f"<{url}|ticket>{f' <{ticket_url}|bts ticket>' if ticket_url else ''}"
             ),
         )

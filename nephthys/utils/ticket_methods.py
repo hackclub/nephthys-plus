@@ -113,7 +113,8 @@ async def delete_and_clean_up_ticket(ticket: Ticket):
     """Removes a ticket from the DB and deletes all Slack messages associated with it"""
     await delete_bot_replies(ticket.id)
     # Delete the backend message in the "tickets" channel
-    await delete_message(env.slack_ticket_channel, ticket.ticket_ts)
+    if env.slack_ticket_channel:
+        await delete_message(env.slack_ticket_channel, ticket.ticket_ts)
     # TODO deal with DMs to tag subscribers?
     await Ticket.delete().where(Ticket.id == ticket.id)
 
@@ -123,6 +124,8 @@ def get_question_message_link(ticket: Ticket) -> str:
     return f"https://hackclub.slack.com/archives/{env.slack_help_channel}/p{ticket.msg_ts.replace('.', '')}"
 
 
-def get_backend_message_link(ticket: Ticket) -> str:
+def get_backend_message_link(ticket: Ticket) -> str | None:
     """Get the Slack message link to the backend ticket message for the provided ticket"""
+    if not env.slack_ticket_channel:
+        return None
     return f"https://hackclub.slack.com/archives/{env.slack_ticket_channel}/p{ticket.ticket_ts.replace('.', '')}"

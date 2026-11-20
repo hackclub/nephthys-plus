@@ -73,7 +73,7 @@ class TeamTag(Macro):
             for user in subscribers:
                 await env.slack_client.chat_postMessage(
                     channel=user.slack_id,
-                    text=f"New ticket for *{tag.name}*: *{ticket.title or ticket.description}*\n<{url}|ticket> <{ticket_url}|bts ticket>",
+                    text=f"New ticket for *{tag.name}*: *{ticket.title or ticket.description}*\n<{url}|ticket>{f' <{ticket_url}|bts ticket>' if ticket_url else ''}",
                 )
 
         await env.slack_client.chat_postEphemeral(

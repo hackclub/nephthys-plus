@@ -1,7 +1,7 @@
 # Nephthys configuration options
 
 Nephthys is configured using environment variables, which can be set
-e.g. in Coolify or a Docker compose file, or loaded from a `.env` file.
+e.g. as Orchard template parameters or in a Docker compose file, or loaded from a `.env` file.
 
 For development, copying and editing the [`.env.sample`](../.env.sample)
 file is the easiest way to get started, but for production there are some
@@ -20,17 +20,39 @@ These should always be configured.
 | `SLACK_BOT_TOKEN` | Required | Slack bot bot token | _N/A_ |
 | `SLACK_SIGNING_SECRET` | Required | Slack bot signing secret | _N/A_ |
 | `SLACK_MAINTAINER_ID` | Required | Slack user ID to ping on certain exceptions | _N/A_ |
-| `SLACK_HEARTBEAT_CHANNEL` | Required | Channel where "heartbeat" (debug) messages are set | _N/A_ |
-| `SLACK_TICKET_CHANNEL` | Required | Channel where unresolved threads will be kept | _N/A_ |
+| `SLACK_HEARTBEAT_CHANNEL` | Optional | Channel where "heartbeat" (debug) messages are set | _Unset_ (no heartbeat messages) |
+| `SLACK_TICKET_CHANNEL` | Optional | Channel where unresolved threads will be kept. If unset, no ticket messages are posted and helpers work from the question threads | _Unset_ (no ticket messages) |
 | `SLACK_BTS_CHANNEL` | Required | Support team channel, used for permission checks | _N/A_ |
 | `SLACK_HELP_CHANNEL` | Required | Public channel where questions are asked | _N/A_ |
 | `DATABASE_URL` | Required | PostgreSQL database connection URL | _N/A_ |
-| `PROGRAM` | Required | Name of a transcript (see `transcripts/` folder) the bot will use for its strings | _N/A_ |
+| `PROGRAM` | Required | Name of a transcript (see `transcripts/` folder) the bot will use for its strings. A name that matches no transcript uses the default strings, which you can customise with the [text variables](#custom-program-text) below | _N/A_ |
 | `APP_TITLE` | Required | A title to be shown to helpers at the top of the App Home, and in the Lobby | _N/A_ |
 | `BASE_URL` | Required | Public HTTPS URL that the bot's web server is accessible from | _N/A_ |
 | `HELPER_OAUTH_CLIENT_ID` | Optional | Slack app client ID. With `HELPER_OAUTH_CLIENT_SECRET` and `TOKEN_ENCRYPTION_KEY`, enables helper OAuth: helpers connect from the App Home dashboard or on joining the bts channel so macros can delete their own trigger messages. Add `BASE_URL/slack/oauth/callback` as a redirect URL in the Slack app | _N/A_ |
 | `HELPER_OAUTH_CLIENT_SECRET` | Optional | Slack app client secret | _N/A_ |
 | `TOKEN_ENCRYPTION_KEY` | Optional | Fernet key used to encrypt stored helper tokens | _N/A_ |
+
+## Custom program text
+
+When `PROGRAM` doesn't match a transcript in the `transcripts/` folder, the channels and maintainer come from the `SLACK_*` variables above, and you can set the bot's messages with the variables below instead of adding a transcript. They are ignored when `PROGRAM` matches a transcript. Use a literal `\n` for line breaks. Macro replies (`?faq`, `?fraud` and so on) always use their defaults.
+
+<!-- prettier-ignore -->
+| Variable | Description |
+| -------- | ----------- |
+| `FAQ_LINK` | Link to your FAQ, used in welcome messages and the FAQ macro |
+| `FAQ_CANVAS_ID` | File ID of the FAQ canvas. Lets the bot link the exact FAQ entry that answers a ticket |
+| `FAQ_EVENTS_QUESTION` | The FAQ canvas question whose answer lists each event with its help channel |
+| `FAQ_SUGGESTION` | Reply when a FAQ entry matches. `{url}` and `{question}` are filled in |
+| `EVENT_CHANNEL_SUGGESTION` | Reply pointing to an event's help channel. `{program}` and `{channel}` are filled in |
+| `FIRST_TICKET_CREATE` | Welcome message for a first-time asker. `(user)` is replaced by their name |
+| `TICKET_CREATE` | Welcome message for everyone else |
+| `TICKET_RESOLVE` | Message when a ticket is resolved. `{user_id}` is the resolver |
+| `TICKET_RESOLVE_STALE` | Message when a ticket is closed as stale |
+| `TICKET_REOPEN` | Message when a ticket is reopened. `{helper_slack_id}` is the helper |
+| `WAIT_TIME_ESTIMATE` | Line under the welcome message. `{wait}` is the typical wait. Empty turns it off |
+| `RESOLVE_TICKET_BUTTON` | Text on the resolve button |
+| `THREAD_BROADCAST_DELETE` | Message when someone posts outside the thread |
+| `TICKET_FEEDBACK_TEXT` | Prompt shown for ticket feedback |
 
 ## AI provider
 
