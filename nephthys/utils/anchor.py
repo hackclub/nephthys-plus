@@ -137,10 +137,12 @@ async def _repost(channel: str) -> None:
 
     # Post the new copy before removing the old one, so the channel is never left
     # without an anchor and a failed post never produces a duplicate (cf. nps.py).
+    # Link channel names at post time too, so anchors saved before linking existed render.
+    text = await link_channel_names(anchor.text)
     try:
         msg = await env.slack_client.chat_postMessage(
             channel=channel,
-            text=anchor.text,
+            text=text,
             unfurl_links=False,
             unfurl_media=False,
         )
@@ -215,8 +217,20 @@ async def handle_channel_message(event: dict) -> None:
 
     thread_ts = event.get("thread_ts")
     if thread_ts and thread_ts == anchor.message_ts and event.get("ts") != thread_ts:
-        # People shouldn't reply in the anchor's thread; the bot can't delete their
-        # messages, so Prometheus removes them (the anchor isn't a discussion thread).
+        # Tell the replier, privately, like `se` does, then remove the reply. The bot
+        # can't delete other people's messages, so Prometheus does that.
+        if event.get("user"):
+            try:
+                await env.slack_client.chat_postEphemeral(
+                    channel=channel,
+                    user=event["user"],
+                    thread_ts=anchor.message_ts,
+                    text="Hey! Please don't reply directly to the anchor message. Instead, start a new thread.",
+                )
+            except SlackApiError as e:
+                logging.warning(
+                    f"Failed to send anchor reply notice: {e.response.get('error')}"
+                )
         try:
             await delete_message(
                 event["ts"], channel, reason="Reply in the channel anchor thread"
@@ -342,10 +356,17 @@ _channel_ids_at = 0.0
 
 
 async def _channel_name_to_id() -> dict[str, str]:
-    """Map channel name -> ID for channels the bot can see, cached for an hour."""
+    """Map channel name -> ID: channels the bot can list (cached an hour), then the
+    ANCHOR_CHANNEL_IDS overrides, which always win."""
     global _channel_ids, _channel_ids_at
-    if _channel_ids and time.time() - _channel_ids_at < _CHANNEL_CACHE_SECONDS:
-        return _channel_ids
+    if not (_channel_ids and time.time() - _channel_ids_at < _CHANNEL_CACHE_SECONDS):
+        listed = await _list_channels()
+        if listed is not None:  # only cache successful lookups
+            _channel_ids, _channel_ids_at = listed, time.time()
+    return {**_channel_ids, **env.anchor_channel_ids}
+
+
+async def _list_channels() -> dict[str, str] | None:
     names: dict[str, str] = {}
     cursor = None
     try:
@@ -362,11 +383,11 @@ async def _channel_name_to_id() -> dict[str, str]:
             if not cursor:
                 break
     except SlackApiError as e:
-        logging.warning(
-            f"Failed to list channels for anchor links: {e.response.get('error')}"
+        logging.error(
+            f"Failed to list channels for anchor links (set ANCHOR_CHANNEL_IDS to "
+            f"link without it): {e.response.get('error')}"
         )
-        return _channel_ids
-    _channel_ids, _channel_ids_at = names, time.time()
+        return None
     return names
 
 
