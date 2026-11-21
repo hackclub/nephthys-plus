@@ -45,6 +45,9 @@ from nephthys.utils.ticket_methods import ThreadGoneError
 # Message subtypes that should be handled by on_message (messages with no subtype are always handled)
 ALLOWED_SUBTYPES = ["file_share", "me_message", "thread_broadcast"]
 
+# Macros that can run in any thread, even one without a ticket
+NO_TICKET_MACROS = {"threadrip", "deleteop"}
+
 TICKET_TITLE_GENERATION_DURATION = Histogram(
     "nephthys_ticket_title_generation_duration_seconds",
     "How long it takes to generate a ticket title using AI",
@@ -96,6 +99,26 @@ async def handle_message_in_thread(event: dict[str, Any], db_user: User | None):
         .where(Ticket.msg_ts == event["thread_ts"])
         .first()
     )
+    if not ticket_message and db_user and db_user.helper:
+        first = event.get("text", "").split(maxsplit=1)
+        name = (
+            first[0].lstrip("?").lower() if first and first[0].startswith("?") else ""
+        )
+        if name in NO_TICKET_MACROS:
+            # Threads started by Slackbot, Slack, other bots, etc. never get a
+            # ticket, but helpers still need to be able to delete them.
+            await run_macro(
+                name=name,
+                ticket=Ticket(
+                    msg_ts=event["thread_ts"],
+                    status=TicketStatus.CLOSED,
+                    opened_by=None,
+                ),
+                helper=db_user,
+                text=event["text"],
+                macro_ts=event["ts"],
+            )
+            return
     if not ticket_message:
         if db_user and db_user.helper and event.get("text", "").startswith("?"):
             logging.warning(
