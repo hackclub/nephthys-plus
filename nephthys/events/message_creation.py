@@ -308,7 +308,7 @@ async def handle_new_question(
     if team_tag:
         await ticket.add_m2m(team_tag, m2m=Ticket.team_tags)
 
-    if ticket_message and (category_tag or team_tag):
+    if ticket_message and env.slack_ticket_channel and (category_tag or team_tag):
         blocks = await backend_message_blocks(
             author_user_id=author_id,
             msg_ts=event["ts"],
