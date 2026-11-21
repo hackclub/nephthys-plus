@@ -45,6 +45,11 @@ from nephthys.utils.ticket_methods import ThreadGoneError
 # Message subtypes that should be handled by on_message (messages with no subtype are always handled)
 ALLOWED_SUBTYPES = ["file_share", "me_message", "thread_broadcast"]
 
+# Macros that can run in threads started by Slackbot, Slack or other bots
+NO_TICKET_MACROS = {"threadrip", "deleteop"}
+BOT_USER_IDS = {"USLACKBOT", "SLACK"}
+BOT_SUBTYPES = {"slackbot_response", "bot_message"}
+
 TICKET_TITLE_GENERATION_DURATION = Histogram(
     "nephthys_ticket_title_generation_duration_seconds",
     "How long it takes to generate a ticket title using AI",
@@ -85,6 +90,26 @@ async def handle_message_sent_to_channel(event: dict[str, Any], client: AsyncWeb
     )
 
 
+async def is_bot_thread(channel: str, thread_ts: str) -> bool:
+    """Whether the thread's parent message was sent by Slackbot, Slack or a bot."""
+    try:
+        res = await env.slack_client.conversations_replies(
+            channel=channel, ts=thread_ts, limit=1
+        )
+    except SlackApiError:
+        logging.warning(f"Couldn't fetch thread parent thread_ts={thread_ts}")
+        return False
+    messages = res.get("messages") or []
+    if not messages:
+        return False
+    parent = messages[0]
+    return bool(
+        parent.get("bot_id")
+        or parent.get("user") in BOT_USER_IDS
+        or parent.get("subtype") in BOT_SUBTYPES
+    )
+
+
 async def handle_message_in_thread(event: dict[str, Any], db_user: User | None):
     """Handle a message sent in a help thread.
 
@@ -96,6 +121,28 @@ async def handle_message_in_thread(event: dict[str, Any], db_user: User | None):
         .where(Ticket.msg_ts == event["thread_ts"])
         .first()
     )
+    if not ticket_message and db_user and db_user.helper:
+        first = event.get("text", "").split(maxsplit=1)
+        name = (
+            first[0].lstrip("?").lower() if first and first[0].startswith("?") else ""
+        )
+        if name in NO_TICKET_MACROS and await is_bot_thread(
+            event["channel"], event["thread_ts"]
+        ):
+            # Threads started by Slackbot, Slack, other bots, etc. never get a
+            # ticket, but helpers still need to be able to delete them.
+            await run_macro(
+                name=name,
+                ticket=Ticket(
+                    msg_ts=event["thread_ts"],
+                    status=TicketStatus.CLOSED,
+                    opened_by=None,
+                ),
+                helper=db_user,
+                text=event["text"],
+                macro_ts=event["ts"],
+            )
+            return
     if not ticket_message:
         if db_user and db_user.helper and event.get("text", "").startswith("?"):
             logging.warning(
