@@ -14,6 +14,7 @@
 #   the bot cannot delete itself (as slack-extra's `/se anchor` does).
 import asyncio
 import logging
+import re
 import time
 from datetime import datetime
 from datetime import timedelta
@@ -136,10 +137,12 @@ async def _repost(channel: str) -> None:
 
     # Post the new copy before removing the old one, so the channel is never left
     # without an anchor and a failed post never produces a duplicate (cf. nps.py).
+    # Link channel names at post time too, so anchors saved before linking existed render.
+    text = await link_channel_names(anchor.text)
     try:
         msg = await env.slack_client.chat_postMessage(
             channel=channel,
-            text=anchor.text,
+            text=text,
             unfurl_links=False,
             unfurl_media=False,
         )
@@ -214,8 +217,20 @@ async def handle_channel_message(event: dict) -> None:
 
     thread_ts = event.get("thread_ts")
     if thread_ts and thread_ts == anchor.message_ts and event.get("ts") != thread_ts:
-        # People shouldn't reply in the anchor's thread; the bot can't delete their
-        # messages, so Prometheus removes them (the anchor isn't a discussion thread).
+        # Tell the replier, privately, like `se` does, then remove the reply. The bot
+        # can't delete other people's messages, so Prometheus does that.
+        if event.get("user"):
+            try:
+                await env.slack_client.chat_postEphemeral(
+                    channel=channel,
+                    user=event["user"],
+                    thread_ts=anchor.message_ts,
+                    text="Hey! Please don't reply directly to the anchor message. Instead, start a new thread.",
+                )
+            except SlackApiError as e:
+                logging.warning(
+                    f"Failed to send anchor reply notice: {e.response.get('error')}"
+                )
         try:
             await delete_message(
                 event["ts"], channel, reason="Reply in the channel anchor thread"
@@ -335,12 +350,73 @@ async def reject_change(channel: str, proposal_id: int) -> bool:
         return True
 
 
-async def notify_bts(text: str) -> None:
+_CHANNEL_CACHE_SECONDS = 3600
+_channel_ids: dict[str, str] = {}
+_channel_ids_at = 0.0
+
+
+async def _channel_name_to_id() -> dict[str, str]:
+    """Map channel name -> ID: channels the bot can list (cached an hour), then the
+    ANCHOR_CHANNEL_IDS overrides, which always win."""
+    global _channel_ids, _channel_ids_at
+    if not (_channel_ids and time.time() - _channel_ids_at < _CHANNEL_CACHE_SECONDS):
+        listed = await _list_channels()
+        if listed is not None:  # only cache successful lookups
+            _channel_ids, _channel_ids_at = listed, time.time()
+    return {**_channel_ids, **env.anchor_channel_ids}
+
+
+async def _list_channels() -> dict[str, str] | None:
+    names: dict[str, str] = {}
+    cursor = None
+    try:
+        while True:
+            resp = await env.slack_client.conversations_list(
+                types="public_channel,private_channel",
+                exclude_archived=True,
+                limit=1000,
+                cursor=cursor,
+            )
+            for channel in resp.get("channels", []):
+                names[channel["name"]] = channel["id"]
+            cursor = (resp.get("response_metadata") or {}).get("next_cursor")
+            if not cursor:
+                break
+    except SlackApiError as e:
+        logging.error(
+            f"Failed to list channels for anchor links (set ANCHOR_CHANNEL_IDS to "
+            f"link without it): {e.response.get('error')}"
+        )
+        return None
+    return names
+
+
+async def link_channel_names(text: str) -> str:
+    """Turn `#name` into a real `<#ID|name>` channel link. Unknown names are left alone.
+
+    Plain `#name` text doesn't render as a link when posted through the API, so the
+    anchor and its BTS notice would show it as literal text.
+    """
+    names = await _channel_name_to_id()
+
+    def link(match: re.Match[str]) -> str:
+        name = match.group(1)
+        channel_id = names.get(name)
+        return f"<#{channel_id}|{name}>" if channel_id else match.group(0)
+
+    # Skip matches already inside <...>, URLs (after /), entities (after &), or words.
+    return re.sub(r"(?<![\w<#&/])#([a-z0-9][a-z0-9_-]*)", link, text)
+
+
+async def notify_bts(text: str, blocks: list[dict] | None = None) -> None:
     if not env.slack_bts_channel or env.slack_bts_channel == "unset":
         return
     try:
         await env.slack_client.chat_postMessage(
-            channel=env.slack_bts_channel, text=text, unfurl_links=False
+            channel=env.slack_bts_channel,
+            text=text,
+            blocks=blocks,
+            unfurl_links=False,
         )
     except SlackApiError as e:
         logging.warning(f"Failed to notify BTS about anchor: {e.response.get('error')}")

@@ -168,6 +168,17 @@ class Environment:
         self.anchor_proposal_expiry_days = max(
             0, int(os.environ.get("ANCHOR_PROPOSAL_EXPIRY_DAYS", "21"))
         )
+        # Explicit channel name -> ID overrides for anchor links, as "name:ID,name:ID".
+        # Used when the bot can't list channels (e.g. Enterprise Grid restrictions).
+        self.anchor_channel_ids = {
+            name.strip().lstrip("#"): channel_id.strip()
+            for name, _, channel_id in (
+                pair.partition(":")
+                for pair in os.environ.get("ANCHOR_CHANNEL_IDS", "").split(",")
+                if pair.strip()
+            )
+            if name.strip() and channel_id.strip()
+        }
         self.enable_feedback = get_environ_bool("ENABLE_FEEDBACK", default=False)
         self.app_title = os.environ.get("APP_TITLE", "helper heidi")
         self.hca = create_hca_config(self.environment)
