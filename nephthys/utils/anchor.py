@@ -356,10 +356,11 @@ _channel_ids_at = 0.0
 
 
 async def _channel_name_to_id() -> dict[str, str]:
-    """Map channel name -> ID: channels the bot can list (cached an hour), then the
-    ANCHOR_CHANNEL_IDS overrides, which always win."""
+    """Map channel name -> ID: channels the bot can list (successful lookups cached an
+    hour; failures retry on the next call), then the ANCHOR_CHANNEL_IDS overrides,
+    which always win."""
     global _channel_ids, _channel_ids_at
-    if not (_channel_ids and time.time() - _channel_ids_at < _CHANNEL_CACHE_SECONDS):
+    if not (_channel_ids_at and time.time() - _channel_ids_at < _CHANNEL_CACHE_SECONDS):
         listed = await _list_channels()
         if listed is not None:  # only cache successful lookups
             _channel_ids, _channel_ids_at = listed, time.time()
@@ -387,6 +388,11 @@ async def _list_channels() -> dict[str, str] | None:
             f"Failed to list channels for anchor links (set ANCHOR_CHANNEL_IDS to "
             f"link without it): {e.response.get('error')}"
         )
+        return None
+    except Exception:
+        # Network errors and timeouts: links fall back to plain text instead of
+        # failing the repost or the proposal.
+        logging.exception("Failed to list channels for anchor links")
         return None
     return names
 
