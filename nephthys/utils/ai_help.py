@@ -24,6 +24,7 @@ from nephthys.utils.ai import provider_routing
 from nephthys.utils.env import env
 
 WORKSPACE_URL = "https://hackclub.slack.com"
+PROGRAMS_API = "https://events-api.hackclub.dev/api/programs"
 MAX_TOOL_ROUNDS = 8
 MAX_OUTPUT_TOKENS = 1500
 
@@ -56,8 +57,9 @@ How to answer:
 5. If you can't find a reliable answer, say so in one sentence and point to the most relevant channel. Never pad with tangential facts, and never state a rule you didn't see confirmed. Never say a program has stopped, ended, or changed, and never give a date, price or amount, unless a message you cite says so; otherwise leave it out or say it is a guess.
 6. Cite at most 2 sources, only ones that directly support what you say: "(<{permalink}|view message>)", copying "permalink" exactly. Never type, build or edit a URL yourself: if a source has no permalink, cite it without a link. Name the author only when who said it matters. For bookmarks, canvases, FAQ and web pages cite the title and exact URL.
 7. Mention channels ONLY as the proper channel token <#CHANNEL_ID>, copied exactly from the lists or tool results (never the plain name, never "#name"). Mention users ONLY as {{USER_ID|name}}, copied exactly as you saw them (never <@...>).
-8. A program or product name you don't recognize is not a typo and may be newer than you: search that exact name before answering, and never answer about the nearest thing you do know.
-9. Never give instructions for fraud, abuse, or anything harmful.
+8. Before naming a program as something to join or use, check it with search_programs. Only recommend programs that are active or upcoming. If it has ended, say so and don't present it as an option.
+9. A program or product name you don't recognize is not a typo and may be newer than you: search that exact name before answering, and never answer about the nearest thing you do know.
+10. Never give instructions for fraud, abuse, or anything harmful.
 
 Help channels:
 {HELP_CHANNELS}
@@ -124,6 +126,23 @@ TOOLS: list[ChatCompletionToolParam] = [
     {
         "type": "function",
         "function": {
+            "name": "search_programs",
+            "description": "Look up Hack Club YSWS programs with their start/end dates, website and status (active, upcoming or ended). Filter by status and/or a name substring.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "type": "string",
+                        "enum": ["active", "upcoming", "ended", "all"],
+                    },
+                    "name": {"type": "string"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "read_web_page",
             "description": "Fetch the text of a public web page (e.g. an FAQ or docs site).",
             "parameters": {
@@ -179,6 +198,38 @@ async def _fetch_text(url: str, headers: dict[str, str] | None = None) -> str:
     return "Error: too many redirects"
 
 
+async def search_programs(status: str = "all", name: str = "") -> Any:
+    path = "" if status == "all" else f"/{status}"
+    async with env.session.get(
+        PROGRAMS_API + path, timeout=aiohttp.ClientTimeout(total=10)
+    ) as res:
+        if res.status != 200:
+            return {"error": f"programs API returned status {res.status}"}
+        data = (await res.json()).get("data", [])
+    today = datetime.now(UTC).strftime("%Y-%m-%d")
+    results = []
+    for p in data:
+        if name and name.lower() not in (p.get("Name") or "").lower():
+            continue
+        start, end = p.get("Start Date"), p.get("End Date")
+        if end and end < today:
+            state = "ended"
+        elif start and start > today:
+            state = "upcoming"
+        else:
+            state = "active"
+        results.append(
+            {
+                "name": p.get("Name"),
+                "status": state,
+                "start": start,
+                "end": end,
+                "website": p.get("Website URL"),
+            }
+        )
+    return results[:40]
+
+
 class _Run:
     def __init__(self):
         self.channels: dict[str, str] = {}
@@ -188,6 +239,10 @@ class _Run:
         try:
             if name == "read_web_page":
                 return {"content": await _fetch_text(args["url"])}
+            if name == "search_programs":
+                return await search_programs(
+                    args.get("status") or "all", args.get("name") or ""
+                )
             if name == "search_messages":
                 return await self.search_messages(args["query"])
             if name == "read_thread":
