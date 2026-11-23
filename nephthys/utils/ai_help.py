@@ -128,7 +128,7 @@ TOOLS: list[ChatCompletionToolParam] = [
         "type": "function",
         "function": {
             "name": "search_programs",
-            "description": 'Look up Hack Club YSWS programs with their start/end dates, website and status (active, upcoming or ended). Filter by status and/or a name substring. Results are newest first and capped; check "total" and "note" for how many were left out.',
+            "description": 'Look up Hack Club YSWS programs with their start/end dates, website and status (active, upcoming or ended). Filter by status and/or a name substring. Results are capped; check "total" and "note" for how many were left out.',
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -237,7 +237,7 @@ async def search_programs(status: str = "all", name: str = "") -> Any:
             f"{len(results) - len(shown)} left out"
         )
         out["note"] = (
-            f"Only the {len(shown)} most recent of {len(results)} matches are shown. "
+            f"Only the first {len(shown)} of {len(results)} matches are shown. "
             "Filter by name or status to see the rest."
         )
     return out
