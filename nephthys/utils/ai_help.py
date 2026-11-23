@@ -25,6 +25,7 @@ from nephthys.utils.env import env
 
 WORKSPACE_URL = "https://hackclub.slack.com"
 PROGRAMS_API = "https://events-api.hackclub.dev/api/programs"
+PROGRAMS_LIMIT = 60
 MAX_TOOL_ROUNDS = 8
 MAX_OUTPUT_TOKENS = 1500
 
@@ -127,7 +128,7 @@ TOOLS: list[ChatCompletionToolParam] = [
         "type": "function",
         "function": {
             "name": "search_programs",
-            "description": "Look up Hack Club YSWS programs with their start/end dates, website and status (active, upcoming or ended). Filter by status and/or a name substring.",
+            "description": 'Look up Hack Club YSWS programs with their start/end dates, website and status (active, upcoming or ended). Filter by status and/or a name substring. Results are capped; check "total" and "note" for how many were left out.',
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -227,7 +228,19 @@ async def search_programs(status: str = "all", name: str = "") -> Any:
                 "website": p.get("Website URL"),
             }
         )
-    return results[:40]
+    shown = results[:PROGRAMS_LIMIT]
+    out: dict[str, Any] = {"total": len(results), "programs": shown}
+    if len(results) > len(shown):
+        logging.warning(
+            f"search_programs(status={status!r}, name={name!r}) matched "
+            f"{len(results)} programs, over the cap of {PROGRAMS_LIMIT}; "
+            f"{len(results) - len(shown)} left out"
+        )
+        out["note"] = (
+            f"Only the first {len(shown)} of {len(results)} matches are shown. "
+            "Filter by name or status to see the rest."
+        )
+    return out
 
 
 class _Run:
