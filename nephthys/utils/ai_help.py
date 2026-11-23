@@ -231,6 +231,11 @@ async def search_programs(status: str = "all", name: str = "") -> Any:
     shown = results[:PROGRAMS_LIMIT]
     out: dict[str, Any] = {"total": len(results), "programs": shown}
     if len(results) > len(shown):
+        logging.warning(
+            f"search_programs(status={status!r}, name={name!r}) matched "
+            f"{len(results)} programs, over the cap of {PROGRAMS_LIMIT}; "
+            f"{len(results) - len(shown)} left out"
+        )
         out["note"] = (
             f"Only the {len(shown)} most recent of {len(results)} matches are shown. "
             "Filter by name or status to see the rest."
