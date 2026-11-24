@@ -353,6 +353,8 @@ async def reject_change(channel: str, proposal_id: int) -> bool:
 _CHANNEL_CACHE_SECONDS = 3600
 # After a failed lookup (e.g. ratelimited), don't hit Slack again until this passes.
 _CHANNEL_RETRY_SECONDS = 300
+# Set per failure: Slack's Retry-After when ratelimited, otherwise the default above.
+_channel_retry_seconds = _CHANNEL_RETRY_SECONDS
 _channel_ids: dict[str, str] = {}
 _channel_ids_at = 0.0
 _channel_lookup_failed_at = 0.0
@@ -365,7 +367,10 @@ async def _channel_name_to_id() -> dict[str, str]:
     global _channel_ids, _channel_ids_at, _channel_lookup_failed_at
     now = time.time()
     cache_fresh = _channel_ids_at and now - _channel_ids_at < _CHANNEL_CACHE_SECONDS
-    in_backoff = _channel_lookup_failed_at and now - _channel_lookup_failed_at < _CHANNEL_RETRY_SECONDS
+    in_backoff = (
+        _channel_lookup_failed_at
+        and now - _channel_lookup_failed_at < _channel_retry_seconds
+    )
     if not cache_fresh and not in_backoff:
         listed = await _list_channels()
         if listed is not None:
@@ -393,10 +398,22 @@ async def _list_channels() -> dict[str, str] | None:
             if not cursor:
                 break
     except SlackApiError as e:
-        logging.error(
-            f"Failed to list channels for anchor links (set ANCHOR_CHANNEL_IDS to "
-            f"link without it): {e.response.get('error')}"
-        )
+        global _channel_retry_seconds
+        error = e.response.get("error")
+        if error == "ratelimited":
+            # Honour Slack's Retry-After instead of retrying on our own schedule.
+            retry = e.response.headers.get("Retry-After")
+            _channel_retry_seconds = int(retry) if retry and retry.isdigit() else 300
+            logging.warning(
+                f"Rate limited listing channels for anchor links; retrying in "
+                f"{_channel_retry_seconds}s (set ANCHOR_CHANNEL_IDS to link without it)"
+            )
+        else:
+            _channel_retry_seconds = _CHANNEL_RETRY_SECONDS
+            logging.error(
+                f"Failed to list channels for anchor links (set ANCHOR_CHANNEL_IDS to "
+                f"link without it): {error}"
+            )
         return None
     except Exception:
         # Network errors and timeouts: links fall back to plain text instead of
