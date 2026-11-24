@@ -1,3 +1,4 @@
+from collections import Counter
 import logging
 import re
 from datetime import datetime
@@ -116,6 +117,9 @@ async def resolve(
     now = datetime.now(UTC)
     credit_user = None
     jev_decided = False
+    ai_failed = False
+    thread: list[dict] = []
+    candidate: list[User] = []
     try:
         replies = await env.slack_client.conversations_replies(
             channel=env.slack_help_channel,
@@ -192,10 +196,22 @@ async def resolve(
             jev_decided = True
     except Exception as e:
         logging.error(f"Failed to pick credit user: {e!r}", exc_info=True)
+        ai_failed = True
+    # If the AI couldn't decide: a stale close credits the helper with the most
+    # messages in the thread; anything else credits whoever closed the ticket.
+    fallback_id = None
+    if ai_failed:
+        if stale:
+            counts = Counter(m["author"] for m in thread)
+            helpers = [c for c in candidate if c.helper and counts[c.slack_id] > 0]
+            top = max(helpers, key=lambda c: counts[c.slack_id], default=None)
+            fallback_id = top.id if top else None
+        else:
+            fallback_id = resolving_user.id
     await Ticket.update(
         {
             Ticket.status: TicketStatus.CLOSED,
-            Ticket.closed_by: credit_user.id if credit_user else None,
+            Ticket.closed_by: credit_user.id if credit_user else fallback_id,
             Ticket.closed_at: now,
         }
     ).where(Ticket.msg_ts == ts)
