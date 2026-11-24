@@ -351,19 +351,28 @@ async def reject_change(channel: str, proposal_id: int) -> bool:
 
 
 _CHANNEL_CACHE_SECONDS = 3600
+# After a failed lookup (e.g. ratelimited), don't hit Slack again until this passes.
+_CHANNEL_RETRY_SECONDS = 300
 _channel_ids: dict[str, str] = {}
 _channel_ids_at = 0.0
+_channel_lookup_failed_at = 0.0
 
 
 async def _channel_name_to_id() -> dict[str, str]:
     """Map channel name -> ID: channels the bot can list (successful lookups cached an
-    hour; failures retry on the next call), then the ANCHOR_CHANNEL_IDS overrides,
+    hour; failures back off for five minutes), then the ANCHOR_CHANNEL_IDS overrides,
     which always win."""
-    global _channel_ids, _channel_ids_at
-    if not (_channel_ids_at and time.time() - _channel_ids_at < _CHANNEL_CACHE_SECONDS):
+    global _channel_ids, _channel_ids_at, _channel_lookup_failed_at
+    now = time.time()
+    cache_fresh = _channel_ids_at and now - _channel_ids_at < _CHANNEL_CACHE_SECONDS
+    in_backoff = _channel_lookup_failed_at and now - _channel_lookup_failed_at < _CHANNEL_RETRY_SECONDS
+    if not cache_fresh and not in_backoff:
         listed = await _list_channels()
-        if listed is not None:  # only cache successful lookups
+        if listed is not None:
             _channel_ids, _channel_ids_at = listed, time.time()
+            _channel_lookup_failed_at = 0.0
+        else:
+            _channel_lookup_failed_at = time.time()
     return {**_channel_ids, **env.anchor_channel_ids}
 
 
