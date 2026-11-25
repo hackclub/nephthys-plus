@@ -1,6 +1,6 @@
-from collections import Counter
 import logging
 import re
+from collections import Counter
 from datetime import datetime
 from datetime import UTC
 
