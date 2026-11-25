@@ -38,6 +38,7 @@ def provider_routing(model: str) -> dict[str, Any]:
     return {}
 
 
+HACK_CLUB_UP_URL = "https://ai.hackclub.com/up"
 HEALTH_TTL = 60
 HEALTH_TIMEOUT = 3
 _health: tuple[float, bool] | None = None
@@ -52,13 +53,24 @@ async def ai_available() -> bool:
     if _health is not None and now - _health[0] < HEALTH_TTL:
         return _health[1]
     try:
-        response = await _http_client.get(
-            f"{base_url}/models",
-            headers={"Authorization": f"Bearer {api_key}"},
-            timeout=HEALTH_TIMEOUT,
-        )
-        up = response.status_code < 500
-    except httpx.HTTPError:
+        if base_url == DEFAULT_BASE_URL:
+            # Hack Club AI's /up reports 503 when it is out of credits or its
+            # upstreams are failing; /models stays 200 in that case
+            response = await _http_client.get(HACK_CLUB_UP_URL, timeout=HEALTH_TIMEOUT)
+            up = response.status_code < 500
+            if up:
+                balance = response.json().get("balanceRemaining")
+                up = response.json().get("status") != "down" and (
+                    balance is None or balance > 0
+                )
+        else:
+            response = await _http_client.get(
+                f"{base_url}/models",
+                headers={"Authorization": f"Bearer {api_key}"},
+                timeout=HEALTH_TIMEOUT,
+            )
+            up = response.status_code < 500
+    except (httpx.HTTPError, ValueError):
         up = False
     if _health is None or _health[1] != up:
         logging.warning("AI provider is %s", "up" if up else "down")
