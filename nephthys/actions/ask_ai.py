@@ -8,6 +8,7 @@ from slack_sdk.web.async_client import AsyncWebClient
 
 from nephthys.database.tables import Ticket
 from nephthys.utils import ai_help
+from nephthys.utils.ai import ai_available
 
 DISCLAIMER = (
     "_DISCLAIMER: this is a beta feature. this is an llm and may make mistakes. "
@@ -31,6 +32,15 @@ async def ask_ai(
             user=user_id,
             thread_ts=thread_ts,
             text="Only the person who asked the question can use this button.",
+        )
+        return False
+
+    if not await ai_available():
+        await client.chat_postEphemeral(
+            channel=channel,
+            user=user_id,
+            thread_ts=thread_ts,
+            text="The AI is unavailable right now. A helper will be along soon!",
         )
         return False
 

@@ -1,4 +1,6 @@
 import asyncio
+import logging
+import time
 from collections.abc import Mapping
 from typing import Any
 from typing import Literal
@@ -34,6 +36,34 @@ def provider_routing(model: str) -> dict[str, Any]:
     if model.startswith("anthropic/"):
         return {"provider": {"only": ["anthropic"], "allow_fallbacks": False}}
     return {}
+
+
+HEALTH_TTL = 60
+HEALTH_TIMEOUT = 3
+_health: tuple[float, bool] | None = None
+
+
+async def ai_available() -> bool:
+    """Whether the AI provider is reachable. Cached for HEALTH_TTL seconds."""
+    global _health
+    if not ai_client:
+        return False
+    now = time.monotonic()
+    if _health is not None and now - _health[0] < HEALTH_TTL:
+        return _health[1]
+    try:
+        response = await _http_client.get(
+            f"{base_url}/models",
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=HEALTH_TIMEOUT,
+        )
+        up = response.status_code < 500
+    except httpx.HTTPError:
+        up = False
+    if _health is None or _health[1] != up:
+        logging.warning("AI provider is %s", "up" if up else "down")
+    _health = (now, up)
+    return up
 
 
 class ChoiceQuestion(TypedDict):

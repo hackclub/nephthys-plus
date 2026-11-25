@@ -23,6 +23,7 @@ from nephthys.events.message.send_backend_message import backend_message_fallbac
 from nephthys.events.message.send_backend_message import send_backend_message
 from nephthys.macros import run_macro
 from nephthys.utils import prometheus
+from nephthys.utils.ai import ai_available
 from nephthys.utils.ai import ai_client
 from nephthys.utils.ai import decisions
 from nephthys.utils.ai import provider_routing
@@ -301,8 +302,8 @@ async def handle_new_question(
                 client,
                 text=user_facing_message_text,
                 ticket_url=ticket_url,
-                show_ask_ai=bool(ai_client)
-                and 0 <= env.ai_help_min_tickets <= past_tickets,
+                show_ask_ai=0 <= env.ai_help_min_tickets <= past_tickets
+                and await ai_available(),
                 wait_estimate=wait_estimate,
             )
     except ThreadGoneError:
