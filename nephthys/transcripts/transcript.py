@@ -61,7 +61,7 @@ class Transcript(BaseModel):
     )
 
     slack_id_auto_reply: str = Field(
-        default="hey, I think you're asking what your slack id is, it's {user_id} but in the future please just run /id (not in a thread). cheers!",
+        default=":rac_hug_haj: hey, I think you're asking what your slack id is, it's `{user_id}` but in the future please just run /id (not in a thread). cheers!",
         description="Sent as a reply in the thread when a new question asks how to find a Slack ID. {user_id} is replaced with the poster's Slack ID. Leave empty to turn it off",
     )
 
