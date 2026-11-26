@@ -28,6 +28,7 @@ from nephthys.utils.ai import ai_client
 from nephthys.utils.ai import decisions
 from nephthys.utils.ai import provider_routing
 from nephthys.utils.attachments import attachment_parts
+from nephthys.utils.auto_reply import matches_slack_id_question
 from nephthys.utils.env import env
 from nephthys.utils.faq import event_suggestion
 from nephthys.utils.faq import faq_link_label
@@ -386,6 +387,16 @@ async def handle_new_question(
         )
         await delete_and_clean_up_ticket(ticket)
         return
+
+    if env.transcript.slack_id_auto_reply and matches_slack_id_question(text):
+        try:
+            await reply_to_ticket(
+                ticket=ticket,
+                client=client,
+                text=env.transcript.slack_id_auto_reply.replace("{user_id}", author_id),
+            )
+        except (SlackApiError, ThreadGoneError) as e:
+            logging.warning(f"Failed to send Slack ID auto reply: {e}")
 
     async with perf_timer("IDV status lookup"):
         not_verified = await is_not_identity_verified(author_id)

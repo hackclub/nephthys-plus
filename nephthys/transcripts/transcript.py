@@ -60,6 +60,11 @@ class Transcript(BaseModel):
         description="The FAQ canvas question whose answer lists each event followed by its help channel. When set, the AI can tell people which event's help channel to ask in. Leave unset for programs without such a list",
     )
 
+    slack_id_auto_reply: str = Field(
+        default="hey, I think you're asking what your slack id is, it's {user_id} but in the future please just run /id (not in a thread). cheers!",
+        description="Sent as a reply in the thread when a new question asks how to find a Slack ID. {user_id} is replaced with the poster's Slack ID. Leave empty to turn it off",
+    )
+
     event_channel_suggestion: str = Field(
         default="hey, is this {program}? if so then ask in {channel}",
         description="Sent as a reply when the AI thinks the question is about a specific event. {program} is the event's name and {channel} is its help channel",
