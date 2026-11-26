@@ -11,6 +11,7 @@ from prometheus_client import Histogram
 from slack_sdk.errors import SlackApiError
 from slack_sdk.web.async_client import AsyncWebClient
 
+from nephthys.actions.resolve import resolve
 from nephthys.database.enums import TicketStatus
 from nephthys.database.enums import UserType
 from nephthys.database.tables import BotMessage
@@ -51,6 +52,8 @@ ALLOWED_SUBTYPES = ["file_share", "me_message", "thread_broadcast"]
 NO_TICKET_MACROS = {"threadrip", "deleteop"}
 BOT_USER_IDS = {"USLACKBOT", "SLACK"}
 BOT_SUBTYPES = {"slackbot_response", "bot_message"}
+# Slack ID questions are closed with this user credited
+SLACK_ID_AUTO_REPLY_CREDIT = "U09KKMHLS15"
 
 TICKET_TITLE_GENERATION_DURATION = Histogram(
     "nephthys_ticket_title_generation_duration_seconds",
@@ -394,6 +397,13 @@ async def handle_new_question(
                 ticket=ticket,
                 client=client,
                 text=env.transcript.slack_id_auto_reply.replace("{user_id}", author_id),
+            )
+            await resolve(
+                ts=ticket.msg_ts,
+                resolver=SLACK_ID_AUTO_REPLY_CREDIT,
+                client=client,
+                send_resolved_message=False,
+                credit_to=SLACK_ID_AUTO_REPLY_CREDIT,
             )
         except (SlackApiError, ThreadGoneError) as e:
             logging.warning(f"Failed to send Slack ID auto reply: {e}")

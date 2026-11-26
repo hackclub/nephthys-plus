@@ -21,7 +21,6 @@ from nephthys.utils.slack_user import get_user_profile
 from nephthys.utils.ticket_methods import delete_message
 from nephthys.utils.ticket_methods import reply_to_ticket
 
-
 CREDIT_INSTRUCTIONS = (
     "Pick who gets credit for helping with this ticket. Choose the person who did the "
     "most to answer or solve the poster's question, judged by the substance of their "
@@ -79,26 +78,33 @@ async def resolve(
     stale: bool = False,
     add_reaction: bool = True,
     send_resolved_message: bool = True,
+    credit_to: str | None = None,
 ):
-    resolving_user = await User.objects().where(User.slack_id == resolver).first()
-    if not resolving_user:
-        logging.info(
-            f"User {resolver} attempted to resolve ticket with ts {ts} but isn't in the database."
-        )
-        return
+    """Close a ticket. If credit_to is a Slack ID, that user gets the credit and
+    the AI credit decision and the permission check are skipped."""
+    if credit_to:
+        resolving_user = (await get_or_create_users({credit_to}))[0]
+    else:
+        found = await User.objects().where(User.slack_id == resolver).first()
+        if not found:
+            logging.info(
+                f"User {resolver} attempted to resolve ticket with ts {ts} but isn't in the database."
+            )
+            return
+        resolving_user = found
 
-    allowed = await can_resolve(resolving_user.slack_id, resolving_user.id, ts)
-    if not allowed:
-        logging.info(
-            f"User {resolver} attempted to resolve ticket with ts {ts} without permission."
-        )
-        await client.chat_postEphemeral(
-            channel=env.slack_help_channel,
-            thread_ts=ts,
-            user=resolver,
-            text="Only helpers or the original poster can mark this thread as resolved.",
-        )
-        return
+        allowed = await can_resolve(resolving_user.slack_id, resolving_user.id, ts)
+        if not allowed:
+            logging.info(
+                f"User {resolver} attempted to resolve ticket with ts {ts} without permission."
+            )
+            await client.chat_postEphemeral(
+                channel=env.slack_help_channel,
+                thread_ts=ts,
+                user=resolver,
+                text="Only helpers or the original poster can mark this thread as resolved.",
+            )
+            return
 
     ticket = await Ticket.objects(Ticket.assigned_to, Ticket.opened_by).get(
         (Ticket.msg_ts == ts)
@@ -120,83 +126,86 @@ async def resolve(
     ai_failed = False
     thread: list[dict] = []
     candidate: list[User] = []
-    try:
-        replies = await env.slack_client.conversations_replies(
-            channel=env.slack_help_channel,
-            ts=ticket.msg_ts,
-            include_all_metadata=True,
-            limit=500,
-        )
-        thread = []
-        for msg in (replies["messages"] or [])[1:]:
-            metadata = msg.get("metadata") or {}
-            author = None
-            if metadata.get("event_type") == "nephthys_macro_reply":
-                author = (metadata.get("event_payload") or {}).get("source_user_id")
-            elif not msg.get("bot_id"):
-                author = msg.get("user")
-            if author and (
-                author == ticket.opened_by.slack_id
-                or not HOUSEKEEPING.search(msg.get("text") or "")
-            ):
-                thread.append({"author": author, "text": msg.get("text") or ""})
-        opener = ticket.opened_by
-        authors = {m["author"] for m in thread} - {opener.slack_id}
-        candidate = await get_or_create_users(authors)
-        if not env.credit_non_helpers:
-            candidate = [c for c in candidate if c.helper]
-        if candidate:
-            names = {
-                c.slack_id: f"{c.username or c.slack_id} "
-                f"({'helper' if c.helper else 'community member'})"
-                for c in candidate
-            }
-            for m in thread:
-                m["role"] = (
-                    "poster"
-                    if m["author"] == opener.slack_id
-                    else names.get(m["author"], "non-human")
-                )
-            credit_user = candidate[0] if len(candidate) == 1 else None
-            response = await decisions(
-                model=env.ai_credit_model,
-                state={
-                    "question": {
-                        "title": ticket.title,
-                        "description": ticket.description,
+    if credit_to:
+        credit_user = resolving_user
+    else:
+        try:
+            replies = await env.slack_client.conversations_replies(
+                channel=env.slack_help_channel,
+                ts=ticket.msg_ts,
+                include_all_metadata=True,
+                limit=500,
+            )
+            thread = []
+            for msg in (replies["messages"] or [])[1:]:
+                metadata = msg.get("metadata") or {}
+                author = None
+                if metadata.get("event_type") == "nephthys_macro_reply":
+                    author = (metadata.get("event_payload") or {}).get("source_user_id")
+                elif not msg.get("bot_id"):
+                    author = msg.get("user")
+                if author and (
+                    author == ticket.opened_by.slack_id
+                    or not HOUSEKEEPING.search(msg.get("text") or "")
+                ):
+                    thread.append({"author": author, "text": msg.get("text") or ""})
+            opener = ticket.opened_by
+            authors = {m["author"] for m in thread} - {opener.slack_id}
+            candidate = await get_or_create_users(authors)
+            if not env.credit_non_helpers:
+                candidate = [c for c in candidate if c.helper]
+            if candidate:
+                names = {
+                    c.slack_id: f"{c.username or c.slack_id} "
+                    f"({'helper' if c.helper else 'community member'})"
+                    for c in candidate
+                }
+                for m in thread:
+                    m["role"] = (
+                        "poster"
+                        if m["author"] == opener.slack_id
+                        else names.get(m["author"], "non-human")
+                    )
+                credit_user = candidate[0] if len(candidate) == 1 else None
+                response = await decisions(
+                    model=env.ai_credit_model,
+                    state={
+                        "question": {
+                            "title": ticket.title,
+                            "description": ticket.description,
+                        },
+                        "replies": thread,
                     },
-                    "replies": thread,
-                },
-                questions={
-                    "kind": {
-                        "type": "choice",
-                        "instructions": JUNK_INSTRUCTIONS,
-                        "criteria": JUNK_CRITERIA,
-                    },
-                    "credit": {
-                        "type": "choice",
-                        "instructions": CREDIT_INSTRUCTIONS,
-                        "criteria": {
-                            c.slack_id: (
-                                f"{names[c.slack_id]}: "
-                                f"{sum(1 for m in thread if m['author'] == c.slack_id)} replies"
-                            )
-                            for c in candidate
+                    questions={
+                        "kind": {
+                            "type": "choice",
+                            "instructions": JUNK_INSTRUCTIONS,
+                            "criteria": JUNK_CRITERIA,
+                        },
+                        "credit": {
+                            "type": "choice",
+                            "instructions": CREDIT_INSTRUCTIONS,
+                            "criteria": {
+                                c.slack_id: (
+                                    f"{names[c.slack_id]}: "
+                                    f"{sum(1 for m in thread if m['author'] == c.slack_id)} replies"
+                                )
+                                for c in candidate
+                            },
                         },
                     },
-                },
-            )
-            choice = response["answers"]["credit"]["choice"]
-            is_junk = response["answers"]["kind"]["choice"] == "junk"
-            credit_user = (
-                None
-                if is_junk
-                else next((c for c in candidate if c.slack_id == choice), None)
-            )
-            jev_decided = True
-    except Exception as e:
-        logging.error(f"Failed to pick credit user: {e!r}", exc_info=True)
-        ai_failed = True
+                )
+                choice = response["answers"]["credit"]["choice"]
+                is_junk = response["answers"]["kind"]["choice"] == "junk"
+                credit_user = (
+                    None
+                    if is_junk
+                    else next((c for c in candidate if c.slack_id == choice), None)
+                )
+                jev_decided = True
+        except Exception as e:
+            logging.error(f"Failed to pick credit user: {e!r}", exc_info=True)
+            ai_failed = True
     # If the AI couldn't decide: a stale close credits the helper with the most
     # messages in the thread; anything else credits whoever closed the ticket.
     fallback_id = None
