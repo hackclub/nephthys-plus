@@ -238,6 +238,7 @@ class Environment:
                 "faq_events_question",
                 "faq_suggestion",
                 "event_channel_suggestion",
+                "slack_id_auto_reply",
                 "first_ticket_create",
                 "ticket_create",
                 "wait_time_estimate",
