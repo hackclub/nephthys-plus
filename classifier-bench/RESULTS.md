@@ -10,7 +10,7 @@ Container (python:3.13-slim, `--cpus=1 --memory=2g`, `--network none`, `HF_HUB_O
 - p50 103 ms, p95 380 ms, max 1,723 ms
 - peak RSS 491 MB
 
-Reproduce: place the trained `combined.pkl`, the model cache at `models/`, and an `inputs.json` list of strings next to this folder, then:
+Reproduce: place the trained `combined.pkl`, the model cache at `models/`, and an `inputs.json` list of strings **inside this folder**, then run the commands below. Only load a `combined.pkl` you trust, since pickle runs code on load.
 
     docker build -t classifier-bench .
     docker run --rm --network none --cpus=1 --memory=2g -e HF_HUB_OFFLINE=1 \
