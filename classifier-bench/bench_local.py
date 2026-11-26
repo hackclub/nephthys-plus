@@ -1,7 +1,8 @@
 import json
 import pickle
-import time
 import resource
+import time
+
 import numpy as np
 import scipy.sparse as sp
 from fastembed import TextEmbedding
