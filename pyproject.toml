@@ -48,6 +48,7 @@ dev = ["pre-commit>=4.1.0", "pyright>=1.1.414", "types-authlib>=1.8.0.20260911"]
 [tool.pyright]
 venvPath = "."
 venv = ".venv"
+ignore = ["classifier-bench"]
 
 [tool.hatch.envs.default]
 path = "./.venv/"
