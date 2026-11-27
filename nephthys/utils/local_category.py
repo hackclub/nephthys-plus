@@ -10,7 +10,6 @@ Otherwise callers fall back to the hosted model.
 Install the extra first: `uv sync --extra local-classifier`.
 Only load a model file you trust: pickle runs code on load.
 """
-
 import asyncio
 import logging
 import os
@@ -61,8 +60,8 @@ def _load() -> _Loaded | None:
         import pickle
 
         import numpy as np  # noqa: F401  (needed by the pickled estimators)
-        import scipy.sparse  # noqa: F401
-        from fastembed import TextEmbedding
+        import scipy.sparse  # pyright: ignore[reportMissingImports]  # noqa: F401
+        from fastembed import TextEmbedding  # pyright: ignore[reportMissingImports]
 
         with open(path, "rb") as f:
             saved = pickle.load(f)
@@ -87,7 +86,7 @@ def _load() -> _Loaded | None:
 
 def _predict(model: _Loaded, text: str) -> tuple[str, float]:
     import numpy as np
-    import scipy.sparse as sp
+    import scipy.sparse as sp  # pyright: ignore[reportMissingImports]
 
     emb = np.array(list(model.embedder.embed([text])), dtype=np.float32)
     emb = emb / np.linalg.norm(emb, axis=1, keepdims=True)

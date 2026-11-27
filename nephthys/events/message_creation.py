@@ -25,7 +25,6 @@ from nephthys.events.message.send_backend_message import send_backend_message
 from nephthys.macros import run_macro
 from nephthys.utils import prometheus
 from nephthys.utils.ai import ai_available
-from nephthys.utils.local_category import local_category_name
 from nephthys.utils.ai import ai_client
 from nephthys.utils.ai import decisions
 from nephthys.utils.ai import provider_routing
@@ -37,6 +36,7 @@ from nephthys.utils.faq import faq_link_label
 from nephthys.utils.faq import faq_section_url
 from nephthys.utils.faq import match_faq
 from nephthys.utils.flaron import is_not_identity_verified
+from nephthys.utils.local_category import local_category_name
 from nephthys.utils.performance import perf_timer
 from nephthys.utils.promote import maybe_promote
 from nephthys.utils.slack_user import get_user_profile
