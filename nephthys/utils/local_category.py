@@ -20,12 +20,20 @@ from typing import Any
 EMBED_MODEL = "BAAI/bge-base-en-v1.5"
 
 
+DEFAULT_THRESHOLD = 0.40
+
+
 def _threshold() -> float:
-    raw = os.environ.get("LOCAL_CATEGORY_THRESHOLD", "0.40")
+    raw = os.environ.get("LOCAL_CATEGORY_THRESHOLD")
+    if raw is None:
+        return DEFAULT_THRESHOLD
     try:
         return float(raw)
     except ValueError:
-        raise ValueError(f"Invalid LOCAL_CATEGORY_THRESHOLD={raw!r}") from None
+        logging.error(
+            f"Invalid LOCAL_CATEGORY_THRESHOLD={raw!r}; using {DEFAULT_THRESHOLD}"
+        )
+        return DEFAULT_THRESHOLD
 
 
 @dataclass
@@ -34,6 +42,7 @@ class _Loaded:
     tfidf: Any
     clf: Any
     embedder: Any
+    threshold: float
 
 
 _loaded: _Loaded | None = None
@@ -67,6 +76,7 @@ def _load() -> _Loaded | None:
             tfidf=saved["tfidf"],
             clf=saved["clf"],
             embedder=embedder,
+            threshold=_threshold(),
         )
         logging.info(f"Loaded local category model from {path}")
     except Exception:
@@ -89,12 +99,14 @@ def _predict(model: _Loaded, text: str) -> tuple[str, float]:
 
 async def local_category_name(text: str, tag_names: list[str]) -> str | None:
     """Return the chosen tag name, or None to fall back to the hosted model."""
-    model = _load()
-    if model is None:
+    model = await asyncio.to_thread(_load)
+    if model is None or frozenset(tag_names) != model.labels:
         return None
-    if frozenset(tag_names) != model.labels:
+    try:
+        label, confidence = await asyncio.to_thread(_predict, model, text)
+    except Exception:
+        logging.error("Local category prediction failed", exc_info=True)
         return None
-    label, confidence = await asyncio.to_thread(_predict, model, text)
-    if confidence < _threshold():
+    if confidence < model.threshold:
         return None
     return label
