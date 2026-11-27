@@ -45,6 +45,14 @@ build-backend = "hatchling.build"
 [dependency-groups]
 dev = ["pre-commit>=4.1.0", "pyright>=1.1.414", "types-authlib>=1.8.0.20260911"]
 
+[project.optional-dependencies]
+local-classifier = [
+    "fastembed>=0.9.1",
+    "onnxruntime>=1.32.0",
+    "scikit-learn==1.9.1",
+    "scipy>=1.18.1",
+]
+
 [tool.pyright]
 venvPath = "."
 venv = ".venv"

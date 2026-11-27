@@ -25,6 +25,7 @@ from nephthys.events.message.send_backend_message import send_backend_message
 from nephthys.macros import run_macro
 from nephthys.utils import prometheus
 from nephthys.utils.ai import ai_available
+from nephthys.utils.local_category import local_category_name
 from nephthys.utils.ai import ai_client
 from nephthys.utils.ai import decisions
 from nephthys.utils.ai import provider_routing
@@ -643,6 +644,11 @@ async def generate_category_tag(text: str) -> CategoryTag | None:
     category_tags = await CategoryTag.objects()
     if not category_tags or not ai_client:
         return None
+    local_name = await local_category_name(text, [tag.name for tag in category_tags])
+    if local_name:
+        local_tag = next((tag for tag in category_tags if tag.name == local_name), None)
+        if local_tag:
+            return local_tag
     model = env.ai_category_model
 
     try:
