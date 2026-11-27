@@ -36,6 +36,7 @@ from nephthys.utils.faq import faq_link_label
 from nephthys.utils.faq import faq_section_url
 from nephthys.utils.faq import match_faq
 from nephthys.utils.flaron import is_not_identity_verified
+from nephthys.utils.local_category import local_category_name
 from nephthys.utils.performance import perf_timer
 from nephthys.utils.promote import maybe_promote
 from nephthys.utils.slack_user import get_user_profile
@@ -643,6 +644,11 @@ async def generate_category_tag(text: str) -> CategoryTag | None:
     category_tags = await CategoryTag.objects()
     if not category_tags or not ai_client:
         return None
+    local_name = await local_category_name(text, [tag.name for tag in category_tags])
+    if local_name:
+        local_tag = next((tag for tag in category_tags if tag.name == local_name), None)
+        if local_tag:
+            return local_tag
     model = env.ai_category_model
 
     try:
