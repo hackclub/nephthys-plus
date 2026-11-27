@@ -1,15 +1,14 @@
-"""Optional local category tagger, used before the hosted decision model.
-
-Enabled only when LOCAL_CATEGORY_MODEL_PATH points at a trained model file
-(a pickle holding a fitted TF-IDF union and logistic regression, trained on
-TF-IDF features plus fastembed bge-base-en-v1.5 embeddings). It is used only
-when the deployment's category tag names exactly match the labels the model
-was trained on, and only when its top probability reaches the threshold.
-Otherwise callers fall back to the hosted model.
-
-Install the extra first: `uv sync --extra local-classifier`.
-Only load a model file you trust: pickle runs code on load.
-"""
+# Optional local category tagger, used before the hosted decision model.
+#
+# Enabled only when LOCAL_CATEGORY_MODEL_PATH points at a trained model file
+# (a pickle holding a fitted TF-IDF union and logistic regression, trained on
+# TF-IDF features plus fastembed bge-base-en-v1.5 embeddings). It is used only
+# when the deployment's category tag names exactly match the labels the model
+# was trained on, and only when its top probability reaches the threshold.
+# Otherwise callers fall back to the hosted model.
+#
+# Install the extra first: `uv sync --extra local-classifier`.
+# Only load a model file you trust: pickle runs code on load.
 import asyncio
 import logging
 import os
